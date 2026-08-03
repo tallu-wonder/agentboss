@@ -96,7 +96,8 @@ together, switch with the same keys.
 | `enter` / `l` / click | open in the viewport (wakes dormant sessions; asks first for `old` ones) |
 | `o` | open but keep focus in the sidebar |
 | `C-\` | sidebar ⇄ session; from another tmux session, jump to the desk |
-| `[` `]`, tab clicks | previous / next tab |
+| `[` `]`, tab clicks | previous / next session |
+| `alt+[` `alt+]` | the same two keys, **from inside an agent** — tmux intercepts them before the agent sees them, so you never leave the pane you are typing in |
 | `1`–`9` | the n-th **open** session — same order as the tabs |
 | `a` | jump to the next session needing attention |
 | `/` | search (substring on name/folder/group, fuzzy on name) |
@@ -112,6 +113,11 @@ together, switch with the same keys.
 | `<` `>`, drag divider | sidebar width |
 | `s` · `x` | close the tab (session stays) · close to `old`; on an old session, delete |
 | `q` | quit the manager — every agent keeps running |
+
+On macOS, Option only sends Alt if the terminal says so — Ghostty needs
+`macos-option-as-alt = true`, iTerm2 "Esc+" for the left Option key. Terminals
+that can't, or that use `alt+[` themselves, can move the keys with
+`AGENTDECK_PREV_KEY` / `AGENTDECK_NEXT_KEY`.
 
 Mouse: click a row to open it, drag rows and headers to reorder and regroup,
 click tabs to switch, drag tabs to reorder, middle-click to close, right-click
@@ -142,6 +148,7 @@ All optional; agentdeck works with none of it.
 | `AGENTDECK_HOME` | `~/.agentdeck` | desk, status files, lock |
 | `AGENTDECK_CLAUDE_CMD` / `AGENTDECK_CODEX_CMD` | from `PATH` | the agent binaries |
 | `AGENTDECK_RETURN_KEY` | `C-\` | the sidebar ⇄ session key, in tmux syntax |
+| `AGENTDECK_PREV_KEY` / `AGENTDECK_NEXT_KEY` | `M-[` / `M-]` | cycle sessions from anywhere, agent panes included |
 | `AGENTDECK_NOTIFY` | unset | `needsyou` for blocking requests only, `all`, or `off` |
 | `AGENTDECK_OPEN_CMD` | `open` / `xdg-open` | what `f` and `F` open folders with (`code -n` works) |
 | `AGENTDECK_NO_HOOKS` | unset | set to anything to never touch Claude Code's `settings.json` |

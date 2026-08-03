@@ -90,6 +90,26 @@ func returnKey() string {
 	return `C-\`
 }
 
+// cycleKeys are the desk-wide previous/next session keys. They work while an
+// agent has the keyboard, which the sidebar's [ and ] cannot — alt+[ and alt+]
+// so the two sets of keys are the same keys.
+//
+// alt+[ arrives as ESC [, which is also how every control sequence starts, but
+// terminals emit a sequence as one burst: arrows, function keys, mouse reports
+// and bracketed paste all still parse as themselves. The one cost is that
+// Escape followed by a typed [ within about half a second reads as alt+[ — hold
+// the pause, or set these to something else.
+func cycleKeys() (prev, next string) {
+	prev, next = "M-[", "M-]"
+	if k := os.Getenv("AGENTDECK_PREV_KEY"); k != "" {
+		prev = k
+	}
+	if k := os.Getenv("AGENTDECK_NEXT_KEY"); k != "" {
+		next = k
+	}
+	return prev, next
+}
+
 func main() {
 	cmd := ""
 	if len(os.Args) > 1 {
@@ -184,6 +204,8 @@ environment:
   AGENTDECK_CLAUDE_CMD     claude binary to launch (default: "claude" from PATH)
   AGENTDECK_CODEX_CMD      codex binary to launch (default: "codex" from PATH)
   AGENTDECK_RETURN_KEY     tmux key that returns to the manager (default C-\)
+  AGENTDECK_PREV_KEY       previous session, works inside an agent (default M-[)
+  AGENTDECK_NEXT_KEY       next session, works inside an agent (default M-])
   AGENTDECK_CODEX_HOME     where Codex config + sessions live (default ~/.codex)
   AGENTDECK_OPEN_CMD       program that opens folders (default: open / xdg-open)
   AGENTDECK_NOTIFY         desktop alerts: unset (default) | needsyou | all | off
@@ -309,6 +331,8 @@ func runUI() error {
 	}
 	recordHost()
 	_ = tmuxctl.BindReturnKey(returnKey())
+	prevKey, nextKey := cycleKeys()
+	_ = tmuxctl.BindCycleKeys(shellQuote(self), prevKey, nextKey)
 	_ = tmuxctl.BindStatusClicks(shellQuote(self))
 	tmuxctl.ConfigureServer()
 	tmuxctl.ConfigureManagerSession()

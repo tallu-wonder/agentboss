@@ -137,6 +137,33 @@ func BindReturnKey(key string) error {
 	return err
 }
 
+// BindCycleKeys makes prev/next work from anywhere on the desk, including while
+// an agent has the keyboard.
+//
+// The sidebar's [ and ] only reach the sidebar: once focus is in the viewport the
+// keystrokes belong to the agent. A root-table binding is intercepted by tmux
+// before the pane sees it, which is the same reason the return key works from
+// inside a session.
+//
+// Keys with a bare bracket or brace are deliberately not the default: alt+[
+// arrives as ESC [, which is also how a control sequence starts, so tmux cannot
+// tell the two apart.
+func BindCycleKeys(binPath, prevKey, nextKey string) error {
+	for _, b := range []struct{ key, dir string }{{prevKey, "prev"}, {nextKey, "next"}} {
+		if b.key == "" {
+			continue
+		}
+		_, err := run("bind-key", "-n", b.key,
+			"if", "-F", "#{==:#{session_name},"+ManagerSession+"}",
+			"run-shell \""+binPath+" _tab "+b.dir+"\"",
+			"send-keys "+b.key)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // PaneInfo describes one pane of the manager window.
 type PaneInfo struct {
 	ID   string // "%3"

@@ -552,3 +552,99 @@ func TestTabOrderFollowsTheSidebar(t *testing.T) {
 		t.Errorf("expected both tabs to survive the reorder: %q", d.tabs())
 	}
 }
+
+// Cycling sessions has to work while an agent holds the keyboard: the sidebar's
+// [ and ] never reach tmux from inside a pane, which is the whole point of the
+// root-table bindings.
+func TestCycleKeysWorkFromInsideAnAgent(t *testing.T) {
+	d := newDesk(t)
+	d.newSession("one")
+	d.keys("C-\\")
+	d.newSession("two")
+	d.waitFor("both to be open", func() bool { return len(d.liveSessions()) == 2 })
+
+	// Focus stays in the viewport — where an agent, not the sidebar, has the keys.
+	viewport := ""
+	out, _ := d.tmux("list-panes", "-t", "agentdeck:", "-F", "#{pane_id} #{@agentdeck_role}")
+	for _, l := range strings.Split(out, "\n") {
+		if id, role, ok := strings.Cut(strings.TrimSpace(l), " "); ok && role == "viewport" {
+			viewport = id
+		}
+	}
+	if viewport == "" {
+		t.Fatal("no viewport pane")
+	}
+	if _, err := d.tmux("select-pane", "-t", viewport); err != nil {
+		t.Fatal(err)
+	}
+
+	// A client must exist for a key binding to fire, so attach one.
+	if _, err := d.tmux("new-session", "-d", "-s", "holder", "-x", "160", "-y", "40",
+		"TMUX= tmux attach-session -t agentdeck"); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(1500 * time.Millisecond)
+
+	shown := func() string {
+		out, _ := d.tmux("list-clients", "-F", "#{client_session}")
+		for _, l := range strings.Split(out, "\n") {
+			if strings.HasPrefix(l, "adk_") {
+				return strings.TrimPrefix(strings.TrimSpace(l), "adk_")
+			}
+		}
+		return ""
+	}
+	before := shown()
+	if before == "" {
+		t.Fatal("the viewport is not showing a session")
+	}
+
+	// alt+] arrives as ESC ] — injected as raw bytes, exactly as a terminal sends
+	// them, because the encoding is the whole question: ESC [ also begins every
+	// control sequence.
+	press := func(hex ...string) {
+		args := append([]string{"send-keys", "-t", "holder", "-H"}, hex...)
+		if _, err := d.tmux(args...); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(900 * time.Millisecond)
+	}
+	press("1b", "5d") // alt+]
+	after := shown()
+	if after == before {
+		t.Fatalf("alt+] did not move off %s while the agent had focus", before)
+	}
+	press("1b", "5b") // alt+[
+	if back := shown(); back != before {
+		t.Errorf("alt+[ should have returned to %s, got %s", before, back)
+	}
+	// The csi-u form the desk asks terminals for must work too.
+	press("1b", "5b", "39", "33", "3b", "33", "75") // ESC[93;3u = alt+]
+	if csiu := shown(); csiu == before {
+		t.Errorf("csi-u alt+] did not switch session (still %s)", before)
+	}
+	press("1b", "5b", "39", "31", "3b", "33", "75") // ESC[91;3u = alt+[
+	if back := shown(); back != before {
+		t.Errorf("csi-u alt+[ should have returned to %s, got %s", before, back)
+	}
+	// And the keyboard must still belong to the agent, not the sidebar.
+	role, _ := d.tmux("display-message", "-p", "-t", "agentdeck:", "#{@agentdeck_role}")
+	if strings.TrimSpace(role) != "viewport" {
+		t.Errorf("focus moved out of the agent pane: role=%q", strings.TrimSpace(role))
+	}
+
+	// Binding the CSI prefix must not swallow the sequences that share it. Mouse
+	// reporting is covered by the click and drag tests, which all run with these
+	// bindings in place; here it is the keys that cannot reach the sidebar.
+	for _, seq := range [][]string{
+		{"1b", "5b", "41"},       // up arrow
+		{"1b", "4f", "50"},       // F1
+		{"1b", "5b", "31", "7e"}, // home
+	} {
+		press(seq...)
+		if now := shown(); now != before {
+			t.Errorf("%v was mistaken for a cycle key: session moved %s → %s", seq, before, now)
+			break
+		}
+	}
+}

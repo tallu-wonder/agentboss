@@ -797,7 +797,7 @@ func (m *Model) viewHelp() string {
 		{"o", "open, keep focus here"},
 		{"C-\\", "sidebar ⇄ session"},
 		{"tab", "focus the session"},
-		{"[ ]", "prev / next tab"},
+		{"[ ] M-[ M-]", "prev / next session"},
 		{"1-9", "n-th open session"},
 		{"a", "next needing attention"},
 		{"/", "search"},
