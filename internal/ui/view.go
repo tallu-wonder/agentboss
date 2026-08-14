@@ -181,6 +181,8 @@ func (m *Model) View() string {
 		m.viewFooter()
 }
 
+// overlay floats a box over the session list rather than replacing it — a
+// confirm for "delete forever?" must not hide the very row it is about.
 func (m *Model) overlay(box string) string {
 	// Clamp the box to the pane so a small window never smears the frame.
 	lines := strings.Split(box, "\n")
@@ -188,17 +190,43 @@ func (m *Model) overlay(box string) string {
 	if len(lines) > h {
 		lines = lines[:h]
 	}
+	boxW := 0
 	for i := range lines {
 		lines[i] = ansi.Truncate(lines[i], m.width, "")
+		if w := ansi.StringWidth(lines[i]); w > boxW {
+			boxW = w
+		}
 	}
-	return lipgloss.Place(m.width, h, lipgloss.Center, lipgloss.Center, strings.Join(lines, "\n"))
+	bg := strings.Split(m.viewList(), "\n") // exactly h lines, padded to width
+	x := (m.width - boxW) / 2
+	if x < 0 {
+		x = 0
+	}
+	y := (h - len(lines)) / 2
+	for i, bl := range lines {
+		if y+i < 0 || y+i >= len(bg) {
+			continue
+		}
+		row := bg[y+i]
+		left := ansi.Truncate(row, x, "")
+		right := ansi.TruncateLeft(row, x+ansi.StringWidth(bl), "")
+		// The cuts can leave a style open; reset so the box and the remnant
+		// start clean.
+		bg[y+i] = left + "\x1b[0m" + pad(bl, boxW) + "\x1b[0m" + right
+	}
+	return strings.Join(bg, "\n")
 }
 
 // ---- header / footer ---------------------------------------------------
 
 func (m *Model) viewHeader() string {
 	working, needs, attn := m.counts()
-	left := " " + stHeader.Render("agentdeck") + " "
+	title := stHeader.Render("agentdeck")
+	if m.unfocused {
+		// Keys are going to the agent right now; a dimmed title is the cue.
+		title = stDim.Render("agentdeck")
+	}
+	left := " " + title + " "
 	parts := []string{}
 	if working > 0 {
 		parts = append(parts, stWorking.Render(fmt.Sprintf("%s%d", spinnerFrames[m.spin%len(spinnerFrames)], working)))
@@ -216,7 +244,9 @@ func (m *Model) viewHeader() string {
 		right = stDim.Render("🔇 ") + right
 	}
 	if m.filter != "" && m.mode == modeNormal {
-		right = stNotice.Render("⌕"+m.filter+" ") + right
+		shown, total := m.matchCount()
+		right = stNotice.Render("⌕"+m.filter) +
+			stDim.Render(fmt.Sprintf(" %d/%d ", shown, total)) + right
 	}
 	gap := m.width - ansi.StringWidth(left+mid) - ansi.StringWidth(right)
 	if gap < 1 {
@@ -230,54 +260,110 @@ func (m *Model) viewFooter() string {
 	switch m.mode {
 	case modeSearch:
 		s = " " + stHeader.Render("/") + m.search.View()
+		// No count until a query exists: with nothing typed, collapsed groups
+		// keep sessions out of the rows and the number would read as broken.
+		if strings.TrimSpace(m.filter) != "" {
+			shown, total := m.matchCount()
+			s += stDim.Render(fmt.Sprintf(" %d/%d", shown, total))
+		}
 	case modeInputDir, modeInputGroup, modeRename:
-		s = " " + stHeader.Render(m.inputLabel()+" ") + m.input.View()
+		s = " " + m.inputLabel() + " " + m.input.View()
 	case modeConfirm:
-		s = " " + stDim.Render("y confirm · n cancel")
+		s = "" // the popup itself says y/n; a second copy just pulls the eye
 	case modeImport:
 		s = " " + stDim.Render("enter add · esc cancel")
 	default:
-		if m.notice != "" {
+		switch {
+		case m.notice != "":
 			st := stNotice
 			if m.noticeErr {
 				st = stErr
 			}
 			s = " " + st.Render(m.notice)
-		} else {
-			s = " " + stDim.Render(fitHints(m.width-2,
-				"↵ open", "n new", "i import", "/ find", "S sort", "? keys"))
+		case m.unfocused:
+			s = " " + stDim.Render(fitHints(m.width-2, "keys go to the agent", "C-\\ returns"))
+		default:
+			s = " " + stDim.Render(fitHints(m.width-2, m.footerHints()...))
 		}
 	}
 	return pad(s, m.width)
 }
 
-// fitHints joins hint segments with separators, dropping trailing segments
-// that would not fit — the footer never shows a chopped word.
+// matchCount is how many sessions the active filter lets through, out of all
+// sessions on the desk (old shelf included — the filter searches it too).
+func (m *Model) matchCount() (shown, total int) {
+	for _, r := range m.rows {
+		if r.kind == rowSession {
+			shown++
+		}
+	}
+	return shown, len(m.st.Sessions)
+}
+
+// footerHints picks the hints for what is actually selected — a group header
+// answers to different keys than a session, and an old session's enter means
+// something you should know about before pressing it.
+func (m *Model) footerHints() []string {
+	r := m.selectedRow()
+	switch {
+	case r != nil && r.kind == rowGroup && r.id == oldSection:
+		return []string{"spc open the shelf", "? keys"}
+	case r != nil && r.kind == rowGroup:
+		return []string{"spc collapse", "r rename", "c color", "n new here", "? keys"}
+	case r != nil:
+		if s := m.st.Session(r.id); s != nil && s.Archived {
+			return []string{"↵ revive", "x delete", "m regroup", "? keys"}
+		}
+	}
+	return []string{"↵ open", "n new", "i import", "/ find", "S sort", "? keys"}
+}
+
+// fitHints joins hint segments with separators, dropping middle segments that
+// would not fit — the footer never shows a chopped word. The LAST segment is
+// kept whatever happens: it is "? keys", the door to all the others.
 func fitHints(w int, parts ...string) string {
+	if len(parts) == 0 {
+		return ""
+	}
+	last := parts[len(parts)-1]
 	out := ""
-	for _, p := range parts {
+	for _, p := range parts[:len(parts)-1] {
 		cand := p
 		if out != "" {
 			cand = out + " · " + p
 		}
-		if ansi.StringWidth(cand) > w {
+		if ansi.StringWidth(cand+" · "+last) > w {
 			break
 		}
 		out = cand
 	}
-	return out
+	if out == "" {
+		if ansi.StringWidth(last) > w {
+			return ""
+		}
+		return last
+	}
+	return out + " · " + last
 }
 
+// inputLabel is the footer prompt's label, styled.
 func (m *Model) inputLabel() string {
 	switch m.mode {
 	case modeInputDir:
-		return "dir:"
+		// The new session lands in the selected row's group — silently, unless
+		// it is said here, where the choice is still one esc away.
+		if g := m.st.Group(m.contextGroup()); g != nil {
+			return stHeader.Render("dir → ") +
+				lipgloss.NewStyle().Foreground(groupLip(g.Color)).Render(truncRunes(g.Name, 14)) +
+				stHeader.Render(":")
+		}
+		return stHeader.Render("dir:")
 	case modeInputGroup:
-		return "group:"
+		return stHeader.Render("group:")
 	case modeRename:
-		return "name:"
+		return stHeader.Render("name:")
 	}
-	return ">"
+	return stHeader.Render(">")
 }
 
 // ---- list ------------------------------------------------------------
@@ -420,7 +506,7 @@ func (m *Model) renderSessionRow(id string, num, w int) string {
 	// reports no cost) and across a session's life (no model until the first
 	// turn). Numbers are right-aligned so magnitudes compare down the column.
 	var cols []string
-	if m.width >= 52 {
+	if m.width >= 46 {
 		cell := blank(costW)
 		if c := m.costOf(id); c >= 0.01 {
 			cell = stFaint.Render(padNum(fmtUSD(c), costW))
@@ -698,9 +784,9 @@ func (m *Model) viewInfo() string {
 	if s == nil {
 		return ""
 	}
-	vw := m.width - 8
-	if vw > 52 {
-		vw = 52
+	vw := m.width - 4
+	if vw > 56 {
+		vw = 56
 	}
 	if vw < 16 {
 		vw = 16
@@ -709,8 +795,24 @@ func (m *Model) viewInfo() string {
 	k := m.statusOf(s.ID)
 	icon, ist := m.statusGlyph(k)
 
+	// A value wider than the box wraps onto indented continuation lines —
+	// the dir, the conversation id and the tmux name are the values this
+	// popup exists for, and a narrow sidebar must not eat them.
 	row := func(label string, val string) string {
-		return stDim.Render(pad(label, 9)) + ansi.Truncate(val, vw-9, "…")
+		avail := vw - 9
+		if ansi.StringWidth(val) <= avail {
+			return stDim.Render(pad(label, 9)) + val
+		}
+		wrapped := strings.Split(ansi.Wrap(val, avail, ""), "\n")
+		if len(wrapped) > 3 {
+			wrapped = wrapped[:3]
+			wrapped[2] = ansi.Truncate(wrapped[2], avail-1, "…")
+		}
+		out := stDim.Render(pad(label, 9)) + wrapped[0]
+		for _, l := range wrapped[1:] {
+			out += "\n" + blank(9) + l
+		}
+		return out
 	}
 	var lines []string
 	lines = append(lines, stText.Bold(true).Render(ansi.Truncate(s.Name, vw, "…")), "")
@@ -780,10 +882,15 @@ func (m *Model) viewInfo() string {
 	lines = append(lines, row("process", stDim.Render(live)))
 	lines = append(lines, "", stDim.Render("any key closes"))
 
-	for i := range lines {
-		lines[i] = pad(lines[i], vw)
+	// A wrapped row is several screen lines; flatten before padding.
+	var flat []string
+	for _, l := range lines {
+		flat = append(flat, strings.Split(l, "\n")...)
 	}
-	return stOverlay.Render(strings.Join(lines, "\n"))
+	for i := range flat {
+		flat[i] = pad(flat[i], vw)
+	}
+	return stOverlay.Render(strings.Join(flat, "\n"))
 }
 
 // viewHelp is a full-body page (not a floating box) so it always fits the
@@ -820,8 +927,14 @@ func (m *Model) viewHelp() string {
 	}
 	lines := []string{" " + stHeader.Render("keys"), ""}
 	for _, r := range rows {
-		desc := ansi.Truncate(r[1], max(0, iw-keyW-2), "…")
-		lines = append(lines, " "+stText.Bold(true).Render(pad(r[0], keyW))+stDim.Render(desc))
+		// A narrow sidebar wraps the description instead of chopping it — the
+		// help page is where chopped words cost the most.
+		avail := max(8, iw-keyW-2)
+		parts := strings.Split(ansi.Wordwrap(r[1], avail, " "), "\n")
+		lines = append(lines, " "+stText.Bold(true).Render(pad(r[0], keyW))+stDim.Render(parts[0]))
+		for _, p := range parts[1:] {
+			lines = append(lines, " "+blank(keyW)+stDim.Render(p))
+		}
 	}
 	lines = append(lines, "",
 		" "+stWorking.Render("⠙ working ")+stAlert.Render("◆ needs you"),

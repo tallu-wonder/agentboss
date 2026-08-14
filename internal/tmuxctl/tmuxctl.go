@@ -166,29 +166,30 @@ func BindCycleKeys(binPath, prevKey, nextKey string) error {
 
 // PaneInfo describes one pane of the manager window.
 type PaneInfo struct {
-	ID   string // "%3"
-	Role string // @agentdeck_role: "sidebar" | "viewport"
-	TTY  string
-	Dead bool
-	W, H int
+	ID     string // "%3"
+	Role   string // @agentdeck_role: "sidebar" | "viewport"
+	TTY    string
+	Dead   bool
+	Active bool // holds the keyboard
+	W, H   int
 }
 
 // Panes lists the panes of the manager window with their agentdeck roles.
 func Panes() ([]PaneInfo, error) {
 	out, err := exec.Command("tmux", "list-panes", "-t", "="+ManagerSession+":",
-		"-F", "#{pane_id}\t#{@agentdeck_role}\t#{pane_tty}\t#{pane_dead}\t#{pane_width}\t#{pane_height}").Output()
+		"-F", "#{pane_id}\t#{@agentdeck_role}\t#{pane_tty}\t#{pane_dead}\t#{pane_active}\t#{pane_width}\t#{pane_height}").Output()
 	if err != nil {
 		return nil, err
 	}
 	var panes []PaneInfo
 	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
 		f := strings.Split(line, "\t")
-		if len(f) != 6 {
+		if len(f) != 7 {
 			continue
 		}
-		p := PaneInfo{ID: f[0], Role: f[1], TTY: f[2], Dead: f[3] == "1"}
-		fmt.Sscanf(f[4], "%d", &p.W)
-		fmt.Sscanf(f[5], "%d", &p.H)
+		p := PaneInfo{ID: f[0], Role: f[1], TTY: f[2], Dead: f[3] == "1", Active: f[4] == "1"}
+		fmt.Sscanf(f[5], "%d", &p.W)
+		fmt.Sscanf(f[6], "%d", &p.H)
 		panes = append(panes, p)
 	}
 	return panes, nil

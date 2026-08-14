@@ -681,6 +681,11 @@ func runTab(arg string) {
 		queueCmd("expand-group", "", gid)
 		return
 	}
+	// The ‹N / N› overflow chips step one session toward the hidden side;
+	// the strip follows the active tab, so this also scrolls it.
+	if dir, ok := strings.CutPrefix(arg, "tabs:"); ok {
+		arg = dir
+	}
 	if arg != "manager" && arg != "next" && arg != "prev" {
 		// Remember the grabbed tab in case this click turns into a drag.
 		rec, _ := json.Marshal(dragRec{From: arg, At: time.Now().UnixMilli()})

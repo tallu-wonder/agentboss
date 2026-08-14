@@ -122,6 +122,9 @@ that can't, or that use `alt+[` themselves, can move the keys with
 Mouse: click a row to open it, drag rows and headers to reorder and regroup,
 click tabs to switch, drag tabs to reorder, middle-click to close, right-click
 for a menu, wheel to scroll, and click into the session to talk to the agent.
+When more tabs are open than fit, the strip follows the active one and the
+rest collapse into `‹N` / `N›` chips — click a chip to step that way; it turns
+red when a hidden session needs you.
 
 ## How it works
 

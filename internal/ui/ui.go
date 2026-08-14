@@ -12,11 +12,13 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/charmbracelet/bubbles/textinput"
 
@@ -84,6 +86,7 @@ type Model struct {
 	vpTTY       string
 	activeID    string // session shown in the viewport ("" = placeholder)
 	tabCache    string
+	tabScroll   int // first visible tab when the strip overflows
 	lastTotalW  int // window width at last tick, to tell resizes from drags
 
 	// auto-naming: sessions the user hasn't renamed track the Claude
@@ -103,6 +106,11 @@ type Model struct {
 	input  textinput.Model
 	search textinput.Model
 	filter string
+
+	// unfocused: the keyboard is elsewhere (usually inside the agent). Read
+	// from tmux's pane_active each tick; the sidebar dims its header so a
+	// glance answers "where will my keys land?".
+	unfocused bool
 
 	// pendingDir carries the folder from the new-session prompt to the
 	// agent picker.
@@ -213,7 +221,10 @@ func (m *Model) save() {
 func (m *Model) sidebarWidth(totalW int) int {
 	w := m.st.SidebarWidth
 	if w == 0 {
-		w = 40
+		// Wide enough that every column — cost included — is on by default;
+		// a desk that hides a feature until a divider is dragged doesn't have
+		// that feature.
+		w = 46
 	}
 	if maxW := totalW - 30; w > maxW {
 		w = maxW
@@ -285,6 +296,12 @@ func (m *Model) reconcileViewport() {
 		case m.sidebarPane:
 			sb = &panes[i]
 		}
+	}
+	// Where will keys land? tmux knows exactly; the header dims when the
+	// answer is "not here". Polled rather than event-driven because focus
+	// reports don't reach a pane whose clients are nested tmux clients.
+	if sb != nil {
+		m.unfocused = !sb.Active
 	}
 	total += len(panes) - 1 // pane dividers
 	// Sidebar width: on a window resize, restore the preferred width; when
@@ -470,55 +487,73 @@ func (m *Model) tabItems() []tabItem {
 	return out
 }
 
-func escTmux(s string, maxRunes int) string {
+// truncRunes shortens s to at most maxRunes runes, ellipsized. The width the
+// result occupies is measured separately (a rune is not a cell), so this only
+// caps how much of a long name a tab may spend.
+func truncRunes(s string, maxRunes int) string {
 	if r := []rune(s); len(r) > maxRunes {
-		s = string(r[:maxRunes-1]) + "…"
+		return string(r[:maxRunes-1]) + "…"
 	}
-	return strings.ReplaceAll(s, "#", "##")
+	return s
+}
+
+// tabSeg is one rendered tab: its tmux format string, the cells it occupies
+// on screen, and what its most urgent member wants — so an off-screen alert
+// can still color the overflow chip that hides it.
+type tabSeg struct {
+	body   string
+	width  int
+	active bool
+	alert  status.Kind // NeedsYou, Attention, or "" for neither
 }
 
 // updateTabs renders the tab bar into the outer status line, only touching
 // tmux when it changed. Grouped tabs carry their group's colored rail;
 // collapsed groups fold into one colored tab; a session that needs you gets
 // a BLINKING red tab; unseen output gets a steady yellow label.
+//
+// The strip is windowed to the tmux window's width: the active tab is always
+// kept on screen, and tabs past either edge collapse into clickable ‹N / N›
+// chips (they step to the previous/next session, so a hidden tab is always
+// two clicks away at most). The chips inherit the most urgent hidden status —
+// an alert never scrolls out of sight entirely.
 func (m *Model) updateTabs() {
 	blinkOn := (m.spin/3)%2 == 0 // ~0.9s phase
+	var segs []tabSeg
+	for _, it := range m.tabItems() {
+		var seg tabSeg
+		if it.kind == rowGroup {
+			seg = m.renderGroupTab(it.id, blinkOn)
+		} else {
+			seg = m.renderSessionTab(it.id, blinkOn)
+		}
+		if seg.body != "" {
+			segs = append(segs, seg)
+		}
+	}
+
+	const managerW = 3 // " ☰ "
+	widths := make([]int, len(segs))
+	active := -1
+	for i, s := range segs {
+		widths[i] = s.width
+		if s.active {
+			active = i
+		}
+	}
+	start, end := tabWindow(widths, active, m.tabScroll, m.lastTotalW-managerW)
+	m.tabScroll = start
+
 	var b strings.Builder
 	b.WriteString("#[range=user|manager]#[fg=colour37,bold] ☰ #[default]#[norange]")
-	for _, it := range m.tabItems() {
-		if it.kind == rowGroup {
-			b.WriteString(m.renderGroupTab(it.id, blinkOn))
-			continue
-		}
-		s := m.st.Session(it.id)
-		if s == nil {
-			continue // vanished since the row list was built
-		}
-		k := m.statusOf(s.ID)
-		glyph, glyphFg := tabGlyph(k, m.spin)
-		name := escTmux(s.Name, 22)
-
-		bg, fg, bold := "colour236", "colour250", ""
-		switch {
-		case k == status.NeedsYou && s.ID != m.activeID && blinkOn:
-			bg, fg, glyphFg, bold, glyph = "colour160", "colour231", "colour231", ",bold", "◆"
-		case k == status.NeedsYou && s.ID != m.activeID:
-			fg, glyphFg, bold, glyph = "colour203", "colour203", ",bold", "◆"
-		case k == status.NeedsYou && s.ID == m.activeID:
-			bg, fg, glyphFg, bold, glyph = "colour88", "colour231", "colour231", ",bold", "◆"
-		case s.ID == m.activeID:
-			bg, fg, glyphFg, bold = "colour24", "colour254", "colour254", ",bold"
-		case k == status.Attention:
-			fg, glyphFg, bold, glyph = "colour221", "colour221", ",bold", "●"
-		}
-		b.WriteString("#[range=user|" + s.ID + "]")
-		if g := m.st.Group(s.GroupID); g != nil {
-			b.WriteString("#[fg=" + groupTmux(g.Color) + ",bg=" + bg + "]▎")
-		} else {
-			b.WriteString("#[bg=" + bg + "] ")
-		}
-		b.WriteString("#[fg=" + glyphFg + ",bg=" + bg + bold + "]" + glyph +
-			" #[fg=" + fg + "]" + name + " #[default]#[norange] ")
+	if start > 0 {
+		b.WriteString(overflowChip("prev", "‹", start, worstAlert(segs[:start]), blinkOn))
+	}
+	for _, s := range segs[start:end] {
+		b.WriteString(s.body)
+	}
+	if end < len(segs) {
+		b.WriteString(overflowChip("next", "›", len(segs)-end, worstAlert(segs[end:]), blinkOn))
 	}
 	tabs := b.String()
 	if tabs == m.tabCache {
@@ -529,15 +564,155 @@ func (m *Model) updateTabs() {
 	}
 }
 
+// chipWidth is the cells an overflow chip occupies: "‹12 " or " 12›".
+func chipWidth(hidden int) int {
+	return len(strconv.Itoa(hidden)) + 2
+}
+
+// overflowChip renders the ‹N / N› marker for tabs hidden past one edge.
+// Clicking it steps one session in that direction, which also scrolls the
+// strip. It takes on the most urgent hidden status so a needs-you can blink
+// from behind the edge.
+func overflowChip(dir, arrow string, hidden int, alert status.Kind, blinkOn bool) string {
+	fg, bg, bold := "colour244", "colour234", ""
+	switch {
+	case alert == status.NeedsYou && blinkOn:
+		fg, bg, bold = "colour231", "colour160", ",bold"
+	case alert == status.NeedsYou:
+		fg, bold = "colour203", ",bold"
+	case alert == status.Attention:
+		fg, bold = "colour221", ",bold"
+	}
+	label := arrow + strconv.Itoa(hidden) + " "
+	if dir == "next" {
+		label = " " + strconv.Itoa(hidden) + arrow
+	}
+	return "#[range=user|tabs:" + dir + "]#[fg=" + fg + ",bg=" + bg + bold + "]" +
+		label + "#[default]#[norange]"
+}
+
+// worstAlert returns the most urgent status among segments.
+func worstAlert(segs []tabSeg) status.Kind {
+	worst := status.Kind("")
+	for _, s := range segs {
+		if s.alert == status.NeedsYou {
+			return status.NeedsYou
+		}
+		if s.alert == status.Attention {
+			worst = status.Attention
+		}
+	}
+	return worst
+}
+
+// tabWindow picks the visible slice [start, end) of the tab strip. The
+// active tab must be inside it; prefStart (last tick's window) keeps the
+// strip from jumping around; avail is the cells the tabs may occupy, chips
+// included. avail <= 0 means the width is unknown — show everything.
+func tabWindow(widths []int, active, prefStart, avail int) (start, end int) {
+	n := len(widths)
+	if n == 0 {
+		return 0, 0
+	}
+	total := 0
+	for _, w := range widths {
+		total += w
+	}
+	if avail <= 0 || total <= avail {
+		return 0, n
+	}
+	start = prefStart
+	if start < 0 {
+		start = 0
+	}
+	if start > n-1 {
+		start = n - 1
+	}
+	if active >= 0 && active < start {
+		start = active
+	}
+	fit := func(start int) int {
+		budget := avail
+		if start > 0 {
+			budget -= chipWidth(start)
+		}
+		end := start
+		used := 0
+		for end < n && used+widths[end] <= budget {
+			used += widths[end]
+			end++
+		}
+		// Tabs remain past the right edge: their chip needs room too.
+		for end < n && used+chipWidth(n-end) > budget && end > start {
+			end--
+			used -= widths[end]
+		}
+		if end == start {
+			end = start + 1 // always show at least one tab, clipped if need be
+		}
+		return end
+	}
+	end = fit(start)
+	for active >= end && start < n-1 {
+		start++
+		end = fit(start)
+	}
+	return start, end
+}
+
+// renderSessionTab renders one live session's tab.
+func (m *Model) renderSessionTab(id string, blinkOn bool) tabSeg {
+	s := m.st.Session(id)
+	if s == nil {
+		return tabSeg{} // vanished since the row list was built
+	}
+	k := m.statusOf(s.ID)
+	glyph, glyphFg := tabGlyph(k, m.spin)
+	name := truncRunes(s.Name, 22)
+
+	bg, fg, bold := "colour236", "colour250", ""
+	switch {
+	case k == status.NeedsYou && s.ID != m.activeID && blinkOn:
+		bg, fg, glyphFg, bold, glyph = "colour160", "colour231", "colour231", ",bold", "◆"
+	case k == status.NeedsYou && s.ID != m.activeID:
+		fg, glyphFg, bold, glyph = "colour203", "colour203", ",bold", "◆"
+	case k == status.NeedsYou && s.ID == m.activeID:
+		bg, fg, glyphFg, bold, glyph = "colour88", "colour231", "colour231", ",bold", "◆"
+	case s.ID == m.activeID:
+		bg, fg, glyphFg, bold = "colour24", "colour254", "colour254", ",bold"
+	case k == status.Attention:
+		fg, glyphFg, bold, glyph = "colour221", "colour221", ",bold", "●"
+	}
+	var b strings.Builder
+	b.WriteString("#[range=user|" + s.ID + "]")
+	if g := m.st.Group(s.GroupID); g != nil {
+		b.WriteString("#[fg=" + groupTmux(g.Color) + ",bg=" + bg + "]▎")
+	} else {
+		b.WriteString("#[bg=" + bg + "] ")
+	}
+	b.WriteString("#[fg=" + glyphFg + ",bg=" + bg + bold + "]" + glyph +
+		" #[fg=" + fg + "]" + strings.ReplaceAll(name, "#", "##") + " #[default]#[norange] ")
+	seg := tabSeg{body: b.String(), active: s.ID == m.activeID,
+		// rail/space + glyph + space + name + space + separator
+		width: 5 + ansi.StringWidth(name)}
+	if k == status.NeedsYou || k == status.Attention {
+		seg.alert = k
+	}
+	return seg
+}
+
 // renderGroupTab folds a collapsed group into one tab: colored, with its
 // live-member count; it blinks when a hidden member needs you.
-func (m *Model) renderGroupTab(gid string, blinkOn bool) string {
+func (m *Model) renderGroupTab(gid string, blinkOn bool) tabSeg {
 	g := m.st.Group(gid)
 	if g == nil {
-		return ""
+		return tabSeg{}
 	}
-	liveN, needs, attn := 0, 0, 0
+	liveN, needs, attn, holdsActive := 0, 0, 0, false
 	for _, sid := range m.membersOf(gid) {
+		if sid == m.activeID {
+			holdsActive = true
+		}
 		switch m.statusOf(sid) {
 		case status.NeedsYou:
 			needs++
@@ -549,19 +724,30 @@ func (m *Model) renderGroupTab(gid string, blinkOn bool) string {
 			liveN++
 		}
 	}
-	name := escTmux(g.Name, 18)
+	name := truncRunes(g.Name, 18)
 	bg, fg := "colour236", groupTmux(g.Color)
 	if needs > 0 && blinkOn {
 		bg, fg = "colour160", "colour231"
 	}
 	seg := "#[range=user|grp:" + gid + "]" +
-		"#[fg=" + fg + ",bg=" + bg + ",bold] ▸ " + name + " " + fmt.Sprint(liveN)
+		"#[fg=" + fg + ",bg=" + bg + ",bold] ▸ " + strings.ReplaceAll(name, "#", "##") +
+		" " + fmt.Sprint(liveN)
+	// " ▸ name N" + trailing space + separator
+	width := 4 + ansi.StringWidth(name) + len(fmt.Sprint(liveN)) + 2
 	if needs > 0 {
 		seg += " ◆"
+		width += 2
 	} else if attn > 0 {
 		seg += "#[fg=colour221] ●"
+		width += 2
 	}
-	return seg + " #[default]#[norange] "
+	out := tabSeg{body: seg + " #[default]#[norange] ", width: width, active: holdsActive}
+	if needs > 0 {
+		out.alert = status.NeedsYou
+	} else if attn > 0 {
+		out.alert = status.Attention
+	}
+	return out
 }
 
 // tabGlyph returns the status glyph and its tmux color for tab rendering.
