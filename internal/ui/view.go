@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -14,6 +15,15 @@ import (
 )
 
 var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+
+// optName is what this platform calls the Alt modifier — the key legend must
+// name the key on the user's keyboard, not tmux's name for it.
+func optName() string {
+	if runtime.GOOS == "darwin" {
+		return "opt"
+	}
+	return "alt"
+}
 
 // groupPalette maps a group's color slot to matching terminal colors for
 // the sidebar (lipgloss) and the tab bar (tmux formats).
@@ -281,7 +291,7 @@ func (m *Model) viewFooter() string {
 			}
 			s = " " + st.Render(m.notice)
 		case m.unfocused:
-			s = " " + stDim.Render(fitHints(m.width-2, "keys go to the agent", "C-\\ returns"))
+			s = " " + stDim.Render(fitHints(m.width-2, "keys go to the agent", "ctrl+\\ returns"))
 		default:
 			s = " " + stDim.Render(fitHints(m.width-2, m.footerHints()...))
 		}
@@ -315,7 +325,7 @@ func (m *Model) footerHints() []string {
 			return []string{"↵ revive", "x delete", "m regroup", "? keys"}
 		}
 	}
-	return []string{"↵ open", "n new", "i import", "/ find", "S sort", "? keys"}
+	return []string{"↵ open", "n new", "i import", "/ find", "s sort", "? keys"}
 }
 
 // fitHints joins hint segments with separators, dropping middle segments that
@@ -899,12 +909,14 @@ func (m *Model) viewHelp() string {
 	iw := m.width
 	ih := m.listInnerHeight()
 	keyW := 13
+	opt := optName()
 	rows := [][2]string{
 		{"enter", "open (wakes dormant)"},
 		{"o", "open, keep focus here"},
-		{"C-\\", "sidebar ⇄ session"},
+		{"ctrl+\\", "sidebar ⇄ session"},
 		{"tab", "focus the session"},
-		{"[ ] M-[ M-]", "prev / next session"},
+		{"[ ]", "prev / next session"},
+		{opt + "+[ " + opt + "+]", "same, from inside an agent"},
 		{"1-9", "n-th open session"},
 		{"a", "next needing attention"},
 		{"/", "search"},
@@ -913,7 +925,7 @@ func (m *Model) viewHelp() string {
 		{"N r m", "group / rename / regroup"},
 		{"", "(also renames in the agent)"},
 		{"J K, drag", "reorder rows & groups"},
-		{"S", "sort: status/recent/name/dir"},
+		{"s", "sort: status/recent/name/dir"},
 		{"v", "session info popup"},
 		{"f F", "its folder · scratchpad"},
 		{"M", "mute / unmute alerts"},
@@ -921,7 +933,7 @@ func (m *Model) viewHelp() string {
 		{"c", "cycle group color"},
 		{"spc h", "collapse group (tab folds too)"},
 		{"< >", "sidebar width"},
-		{"s, mid-click", "close tab, stays on desk"},
+		{"z, mid-click", "close tab, stays on desk"},
 		{"x", "close to old · in old: delete"},
 		{"q", "quit, sessions live on"},
 	}
@@ -940,7 +952,7 @@ func (m *Model) viewHelp() string {
 		" "+stWorking.Render("⠙ working ")+stAlert.Render("◆ needs you"),
 		" "+stNew.Render("● new ")+stIdle.Render("· idle ")+stDormant.Render("○ dormant"),
 		"",
-		" "+stDim.Render("tmux prefix here: C-q"),
+		" "+stDim.Render("tmux prefix here: ctrl+q"),
 		" "+stDim.Render("any key closes"))
 	for len(lines) < ih {
 		lines = append(lines, "")

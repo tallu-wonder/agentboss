@@ -203,9 +203,12 @@ environment:
   AGENTDECK_HOME           data dir (default ~/.agentdeck)
   AGENTDECK_CLAUDE_CMD     claude binary to launch (default: "claude" from PATH)
   AGENTDECK_CODEX_CMD      codex binary to launch (default: "codex" from PATH)
-  AGENTDECK_RETURN_KEY     tmux key that returns to the manager (default C-\)
-  AGENTDECK_PREV_KEY       previous session, works inside an agent (default M-[)
-  AGENTDECK_NEXT_KEY       next session, works inside an agent (default M-])
+  AGENTDECK_RETURN_KEY     key that returns to the manager, in tmux syntax
+                           (default C-\, i.e. ctrl+\)
+  AGENTDECK_PREV_KEY       previous session, works inside an agent, tmux syntax
+                           (default M-[, i.e. opt/alt+[)
+  AGENTDECK_NEXT_KEY       next session, works inside an agent, tmux syntax
+                           (default M-], i.e. opt/alt+])
   AGENTDECK_CODEX_HOME     where Codex config + sessions live (default ~/.codex)
   AGENTDECK_OPEN_CMD       program that opens folders (default: open / xdg-open)
   AGENTDECK_NOTIFY         desktop alerts: unset (default) | needsyou | all | off
@@ -445,7 +448,7 @@ func runViewportPlaceholder() {
 		"",
 		"   \x1b[2mpick one on the left —\x1b[0m",
 		"   \x1b[2menter opens · n starts new · i imports\x1b[0m",
-		"   \x1b[2mC-\\ toggles sidebar ⇄ session\x1b[0m",
+		"   \x1b[2mctrl+\\ toggles sidebar ⇄ session\x1b[0m",
 	} {
 		fmt.Println(l)
 	}

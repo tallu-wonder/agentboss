@@ -95,7 +95,7 @@ together, switch with the same keys.
 | --- | --- |
 | `enter` / `l` / click | open in the viewport (wakes dormant sessions; asks first for `old` ones) |
 | `o` | open but keep focus in the sidebar |
-| `C-\` | sidebar ⇄ session; from another tmux session, jump to the desk |
+| `ctrl+\` | sidebar ⇄ session; from another tmux session, jump to the desk |
 | `[` `]`, tab clicks | previous / next session |
 | `alt+[` `alt+]` | the same two keys, **from inside an agent** — tmux intercepts them before the agent sees them, so you never leave the pane you are typing in |
 | `1`–`9` | the n-th **open** session — same order as the tabs |
@@ -104,15 +104,15 @@ together, switch with the same keys.
 | `n` · `i` | new session · import a past conversation (both agents) |
 | `N` · `r` · `m` | new group · rename · move to group |
 | `J` `K`, drag | reorder rows and groups, across groups or onto a header |
-| `S` · `c` | sort · pick a group's color |
+| `s` · `c` | sort · pick a group's color |
 | `v` · `?` | session info · keys |
 | `M` | mute / unmute desktop notifications |
 | `f` · `F` | open the session's folder · the agent's own scratch folder |
 | right-click | context menu, on a row or a tab, with the same keys as the sidebar |
 | `space` / `h` | collapse or expand a group |
 | `<` `>`, drag divider | sidebar width |
-| `s` · `x` | close the tab (session stays) · close to `old`; on an old session, delete |
-| `q` | quit the manager — every agent keeps running |
+| `z` · `x` | close the tab (session stays, asks first) · close to `old`; on an old session, delete |
+| `q` | quit the manager (asks first) — every agent keeps running |
 
 On macOS, Option only sends Alt if the terminal says so — Ghostty needs
 `macos-option-as-alt = true`, iTerm2 "Esc+" for the left Option key. Terminals
@@ -136,9 +136,11 @@ red when a hidden session needs you.
 - **The desk is a file.** Groups, order, folders, agent kind and conversation IDs
   live in `~/.agentdeck/state.json`, written atomically by the one manager that
   holds the lock.
-- **Nothing irreversible is quiet.** Deleting, shelving, sleeping a working
-  session and reviving a shelved one all ask first — in a popup in the middle of
-  the sidebar, not a line in the footer you press past.
+- **Nothing irreversible is quiet.** Deleting, shelving, closing a tab, quitting
+  the manager and reviving a shelved session all ask first — in a popup in the
+  middle of the sidebar, not a line in the footer you press past. Every desk key
+  is a single letter, and sooner or later you will type one believing an agent
+  had focus; the ones that could cost you something are the ones that ask.
 - **A crash is survivable.** If the sidebar panics it writes
   `~/.agentdeck/crash.log`, restarts itself and says so. Your agents never notice.
 
@@ -222,7 +224,7 @@ line is rewritten.
 
 ## Notes
 
-- Inside agentdeck panes the tmux prefix is `C-q`, so the agents' own keys pass
+- Inside agentdeck panes the tmux prefix is `ctrl+q`, so the agents' own keys pass
   through untouched.
 - **shift+enter inserts a newline in both agents.** tmux forwards modified keys
   only to apps that ask the classic way; Codex asks with the kitty protocol,

@@ -289,7 +289,7 @@ func TestDigitKeysFollowTheTabs(t *testing.T) {
 	// Close the first session's tab: it stays on the desk but stops being open.
 	d.waitFor("both to be open", func() bool { return len(d.liveSessions()) == 2 })
 	d.keys("Home")
-	d.keys("s") // close the tab of the selected (first) session
+	d.keys("z", "y") // close the tab of the selected (first) session; z asks first
 	d.waitFor("the first tab to close", func() bool {
 		for _, s := range d.liveSessions() {
 			if s == first {
@@ -473,7 +473,7 @@ func TestQuitLeavesSessionsRunning(t *testing.T) {
 	d.keys("C-\\")
 	d.waitFor("it to be open", func() bool { return len(d.liveSessions()) == 1 })
 
-	d.keys("q")
+	d.keys("q", "y") // quit asks first
 	d.waitFor("the manager session to go", func() bool {
 		out, _ := d.tmux("has-session", "-t", "=agentdeck:")
 		return strings.Contains(out, "can't find") || strings.Contains(out, "no server")
@@ -491,7 +491,7 @@ func TestDeskSurvivesAManagerRestart(t *testing.T) {
 	d.keys("C-\\")
 	d.waitFor("it to be open", func() bool { return len(d.liveSessions()) == 1 })
 
-	d.keys("q")
+	d.keys("q", "y") // quit asks first
 	d.waitFor("the manager to exit", func() bool {
 		out, _ := d.tmux("has-session", "-t", "=agentdeck:")
 		return strings.Contains(out, "can't find") || strings.Contains(out, "no server")

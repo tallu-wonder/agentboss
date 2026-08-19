@@ -1601,7 +1601,7 @@ func (m *Model) openContextMenu() {
 			m.pickItems = append(m.pickItems, pickItem{"unpin", "use the agent's name", "u"})
 		}
 		if m.isLive(s.ID) {
-			m.pickItems = append(m.pickItems, pickItem{"sleep", "close tab (keep on desk)", "s"})
+			m.pickItems = append(m.pickItems, pickItem{"sleep", "close tab (keep on desk)", "z"})
 		}
 		if s.Archived {
 			m.pickItems = append(m.pickItems, pickItem{"restore", "restore from old", "R"})
@@ -1833,11 +1833,21 @@ func gitInfo(dir string) string {
 func (m *Model) keyNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
 	switch key {
-	case "ctrl+c", "q":
+	case "ctrl+c": // the escape hatch stays instant
 		if m.dirty {
 			m.save()
 		}
 		return m, tea.Quit
+
+	case "q":
+		// One stray letter must not take the whole desk down — the classic
+		// accident is typing at the sidebar believing an agent has focus.
+		m.confirm("quit agentdeck? sessions keep running", func() tea.Cmd {
+			if m.dirty {
+				m.save()
+			}
+			return tea.Quit
+		})
 
 	case "up", "k":
 		m.moveSel(-1)
@@ -1945,7 +1955,7 @@ func (m *Model) keyNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-	case "S":
+	case "s", "S":
 		m.openSortPick()
 
 	case "v":
@@ -2052,20 +2062,22 @@ func (m *Model) keyNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "K", "shift+up":
 		m.reorder(-1)
 
-	case "s":
+	case "z": // z as in the zz badge dormant sessions wear
 		id := m.selectedSessionID()
 		if id == "" || !m.isLive(id) {
 			return m, nil
 		}
 		s := m.st.Session(id)
+		// Always confirmed: closing a tab ends the agent's process, and this
+		// key gets hit by people who believe they are typing into an agent.
+		q := fmt.Sprintf("close %q's tab? it stays on the desk", s.Name)
 		if m.statusOf(id) == status.Working {
-			m.confirm(fmt.Sprintf("%q is still working — sleep anyway?", s.Name), func() tea.Cmd {
-				m.sleep(id)
-				return nil
-			})
-		} else {
-			m.sleep(id)
+			q = fmt.Sprintf("%q is still working — close its tab anyway?", s.Name)
 		}
+		m.confirm(q, func() tea.Cmd {
+			m.sleep(id)
+			return nil
+		})
 
 	case "x", "d", "backspace", "delete":
 		r := m.selectedRow()
@@ -2510,6 +2522,9 @@ func (m *Model) keyGroupPick(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// be used the way the sidebar is: look, press the key you already know.
 	if m.pickKind == "menu" {
 		if k := msg.String(); k != "" {
+			if k == " " {
+				k = "space" // menu items label it the way it is spoken
+			}
 			for i, it := range m.pickItems {
 				if it.key != "" && it.key == k {
 					m.pickSel = i
