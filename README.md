@@ -89,6 +89,20 @@ reducing them to a lowest common denominator.
 Mixed desks are the point: group a Claude session next to a Codex one, sort them
 together, switch with the same keys.
 
+## One repo, several agents
+
+Two ways to parallelize that don't step on each other:
+
+- **`W` — a session in a fresh git worktree.** You name it; the worktree lands
+  at `<repo-parent>/.worktrees/<repo>-<name>` on a new branch `<name>`
+  (an existing branch of that name is checked out instead). Each agent gets its
+  own working copy, so nothing they edit collides. agentboss never deletes a
+  worktree — when you're done, `git worktree remove` it.
+- **right-click → fork the conversation.** A NEW session whose conversation
+  starts as a copy of the original — same folder, same context, two approaches
+  from the same point. Uses each agent's own mechanism (`claude --resume
+  --fork-session`, `codex fork`).
+
 ## Keys
 
 | Key | Action |
@@ -102,6 +116,7 @@ together, switch with the same keys.
 | `a` | jump to the next session needing attention |
 | `/` | search (substring on name/folder/group, fuzzy on name) |
 | `n` · `i` | new session · import a past conversation (both agents) |
+| `W` | new session in a fresh **git worktree** of a repo |
 | `N` · `r` · `m` | new group · rename · move to group |
 | `J` `K`, drag | reorder rows and groups, across groups or onto a header |
 | `s` · `c` | sort · pick a group's color |
@@ -112,6 +127,7 @@ together, switch with the same keys.
 | `space` / `h` | collapse or expand a group |
 | `<` `>`, drag divider | sidebar width |
 | `z` · `x` | close the tab (session stays, asks first) · close to `old`; on an old session, delete |
+| `u` | reopen what you just closed or shelved |
 | `q` | quit the manager (asks first) — every agent keeps running |
 
 On macOS, Option only sends Alt if the terminal says so — Ghostty needs
@@ -158,6 +174,7 @@ All optional; agentboss works with none of it.
 | `AGENTBOSS_OPEN_CMD` | `open` / `xdg-open` | what `f` and `F` open folders with (`code -n` works) |
 | `AGENTBOSS_NO_HOOKS` | unset | set to anything to never touch Claude Code's `settings.json` |
 | `AGENTBOSS_PRICING` | `~/.agentboss/pricing.json` | override the cost estimate's rates |
+| `AGENTBOSS_WORKTREE_DIR` | `<repo-parent>/.worktrees` | where `W` puts new git worktrees |
 | `AGENTBOSS_CODEX_HOME` | `~/.codex` | where Codex keeps its config and sessions |
 
 Rates drift, so the cost estimate is overridable — `{"opus": [5, 25], "sonnet":

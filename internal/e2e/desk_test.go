@@ -648,3 +648,49 @@ func TestCycleKeysWorkFromInsideAnAgent(t *testing.T) {
 		}
 	}
 }
+
+// W creates the session in a fresh git worktree, so several agents can work
+// on one repo without touching each other's files.
+func TestWorktreeSession(t *testing.T) {
+	d := newDesk(t)
+	repo := filepath.Join(d.dir, "work", "repo")
+	if err := os.MkdirAll(repo, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"init", "-b", "main"},
+		{"-c", "user.email=e2e@test", "-c", "user.name=e2e", "commit", "--allow-empty", "-m", "root"},
+	} {
+		cmd := exec.Command("git", append([]string{"-C", repo}, args...)...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+
+	d.keys("W", "C-u")
+	d.literal(repo)
+	d.keys("Enter") // repo accepted → worktree name prompt
+	d.literal("try-1")
+	d.keys("Enter") // worktree created → agent picker
+	d.keys("Enter") // Claude
+	d.waitFor("the session to appear", func() bool { return len(d.state().Sessions) == 1 })
+
+	got := d.state().Sessions[0]
+	// git resolves /tmp to /private/tmp on macOS; compare resolved paths.
+	want := filepath.Join(d.dir, "work", ".worktrees", "repo-try-1")
+	wantR, _ := filepath.EvalSymlinks(want)
+	gotR, _ := filepath.EvalSymlinks(got.Dir)
+	if gotR != wantR || gotR == "" {
+		t.Fatalf("session dir = %q, want the worktree %q", got.Dir, want)
+	}
+	want = got.Dir
+	out, err := exec.Command("git", "-C", want, "branch", "--show-current").Output()
+	if err != nil || strings.TrimSpace(string(out)) != "try-1" {
+		t.Fatalf("worktree branch = %q (%v), want try-1", strings.TrimSpace(string(out)), err)
+	}
+	// And the main checkout stayed on its own branch.
+	out, _ = exec.Command("git", "-C", repo, "branch", "--show-current").Output()
+	if strings.TrimSpace(string(out)) != "main" {
+		t.Errorf("the repo's own checkout moved to %q", strings.TrimSpace(string(out)))
+	}
+}

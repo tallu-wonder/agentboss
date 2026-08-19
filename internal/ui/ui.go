@@ -43,12 +43,13 @@ type mode int
 const (
 	modeNormal mode = iota
 	modeSearch
-	modeInputDir   // quick create: directory (name = folder name)
-	modeInputGroup // typing a new group's name
-	modeRename     // renaming a session or group
-	modeGroupPick  // choose a group to move a session into
-	modeConfirm    // y/n confirmation
-	modeImport     // pick a past conversation to add
+	modeInputDir    // quick create: directory (name = folder name)
+	modeInputGroup  // typing a new group's name
+	modeRename      // renaming a session or group
+	modeInputWtName // worktree flow: naming the worktree/branch
+	modeGroupPick   // choose a group to move a session into
+	modeConfirm     // y/n confirmation
+	modeImport      // pick a past conversation to add
 	modeHelp
 	modeInfo // per-session details popup
 )
@@ -112,9 +113,19 @@ type Model struct {
 	// glance answers "where will my keys land?".
 	unfocused bool
 
+	// lastClosed is the session most recently closed or shelved from this
+	// desk, so u can take it back. Confirmations catch the accident you
+	// notice; this catches the one you notice a beat later.
+	lastClosed string
+
 	// pendingDir carries the folder from the new-session prompt to the
 	// agent picker.
 	pendingDir string
+
+	// worktree flow (W): the repo is asked first, then a name; the session's
+	// folder is a fresh git worktree so agents on one repo never collide.
+	wtFlow bool
+	wtRepo string // repo toplevel, validated
 
 	// picker overlay: "group" | "sort" | "menu" | "color" | "agent"
 	pickKind  string
@@ -1239,6 +1250,12 @@ func (m *Model) wake(s *state.Session) error {
 				"echo; echo 'agentboss: resume failed, starting a fresh session'; exec %s; fi",
 			resume, bin)
 	}
+	return m.launch(s, p, cmd)
+}
+
+// launch starts a session's tmux process with the command already composed —
+// the shared tail of wake (fresh or resume) and fork.
+func (m *Model) launch(s *state.Session, p agents.Provider, cmd string) error {
 	name := state.TmuxName(s.ID)
 	env := map[string]string{
 		"AGENTBOSS_ID": s.ID,
@@ -1257,6 +1274,47 @@ func (m *Model) wake(s *state.Session) error {
 	})
 	m.live = tmuxctl.ListSessions()
 	return nil
+}
+
+// forkSession starts a NEW conversation that begins as a copy of an existing
+// one — same folder, same group, the agent's own fork mechanism underneath —
+// so two approaches can be tried side by side.
+func (m *Model) forkSession(srcID string) {
+	src := m.st.Session(srcID)
+	if src == nil {
+		return
+	}
+	if src.SessionID == "" {
+		m.flash("nothing to fork yet — the conversation has no id until its first turn", true)
+		return
+	}
+	p := agents.Get(src.AgentOf())
+	if !p.Installed() {
+		m.flash(p.Label()+" is not installed", true)
+		return
+	}
+	args := p.ForkArgs(src.SessionID)
+	if args == nil {
+		m.flash(p.Label()+" cannot fork a conversation", true)
+		return
+	}
+	cmd := shellQuote(p.Binary())
+	for _, a := range args {
+		cmd += " " + shellQuote(a)
+	}
+	id := m.st.AddAgentSession(src.Name+" fork", src.Dir, src.GroupID, src.AgentOf())
+	ns := m.st.Session(id)
+	// The fork is a NEW conversation: its own id arrives via the SessionStart
+	// hook (Claude) or transcript adoption (Codex), so it starts unset.
+	if err := m.launch(ns, p, cmd); err != nil {
+		m.st.DeleteSession(id)
+		m.flash("fork failed: "+err.Error(), true)
+		return
+	}
+	m.save()
+	m.buildRows()
+	m.selectSession(id)
+	m.open(id, true)
 }
 
 // sleep kills the tmux session but keeps the desk entry for later resume.
@@ -1594,6 +1652,9 @@ func (m *Model) openContextMenu() {
 		m.pickItems = append(m.pickItems,
 			pickItem{"rename", "rename", "r"},
 			pickItem{"move", "move to group…", "m"})
+		if s.SessionID != "" && agents.Get(s.AgentOf()).ForkArgs(s.SessionID) != nil {
+			m.pickItems = append(m.pickItems, pickItem{"fork", "fork the conversation", "k"})
+		}
 		if k := m.statusOf(s.ID); k == status.NeedsYou || k == status.Attention {
 			m.pickItems = append(m.pickItems, pickItem{"seen", "clear alert", "c"})
 		}
@@ -1656,10 +1717,14 @@ func (m *Model) execMenu(action string) tea.Cmd {
 		}
 	case "move":
 		m.openGroupPick(id)
+	case "fork":
+		m.forkSession(id)
 	case "sleep":
 		m.sleep(id)
+		m.lastClosed = id
 	case "archive":
 		m.archive(id)
+		m.lastClosed = id
 	case "restore":
 		if s := m.st.Session(id); s != nil {
 			s.Archived = false
@@ -1787,7 +1852,7 @@ func (m *Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch m.mode {
 	case modeSearch:
 		return m.keySearch(msg)
-	case modeInputDir, modeInputGroup, modeRename:
+	case modeInputDir, modeInputGroup, modeRename, modeInputWtName:
 		return m.keyTextInput(msg)
 	case modeGroupPick:
 		return m.keyGroupPick(msg)
@@ -2007,7 +2072,15 @@ func (m *Model) keyNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "n":
 		m.pickFor = ""
+		m.wtFlow = false
 		m.startInput(modeInputDir, "directory (tab completes)", m.defaultDir())
+
+	case "W":
+		// New session in a fresh git worktree: several agents on one repo
+		// without stepping on each other's files.
+		m.pickFor = ""
+		m.wtFlow = true
+		m.startInput(modeInputDir, "repo (tab completes)", m.defaultDir())
 
 	case "N":
 		m.pickFor = ""
@@ -2076,8 +2149,24 @@ func (m *Model) keyNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.confirm(q, func() tea.Cmd {
 			m.sleep(id)
+			m.lastClosed = id
+			m.flash("closed — u reopens", false)
 			return nil
 		})
+
+	case "u":
+		id := m.lastClosed
+		s := m.st.Session(id)
+		if id == "" || s == nil {
+			return m, nil
+		}
+		m.lastClosed = ""
+		if s.Archived {
+			m.reviveAndOpen(id, false)
+		} else {
+			m.open(id, false)
+		}
+		m.selectSession(id)
 
 	case "x", "d", "backspace", "delete":
 		r := m.selectedRow()
@@ -2110,6 +2199,8 @@ func (m *Model) keyNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.confirm(fmt.Sprintf("close %q → old?", s.Name), func() tea.Cmd {
 			m.archive(id)
+			m.lastClosed = id
+			m.flash("shelved — u takes it back", false)
 			return nil
 		})
 
@@ -2243,6 +2334,7 @@ func (m *Model) keyTextInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.mode = modeNormal
 		m.input.Blur()
 		m.pickFor = "" // abandon a half-finished move
+		m.wtFlow = false
 		return m, nil
 	case "tab":
 		if m.mode == modeInputDir {
@@ -2319,6 +2411,29 @@ func (m *Model) submitInput(val string) (tea.Model, tea.Cmd) {
 			m.flash(err.Error(), true)
 			return m, nil
 		}
+		if m.wtFlow {
+			root, err := gitToplevel(dir)
+			if err != nil {
+				m.flash("not a git repo: "+dir, true)
+				return m, nil
+			}
+			m.wtRepo = root
+			m.startInput(modeInputWtName, "worktree name", "")
+			return m, nil
+		}
+		m.mode = modeNormal
+		m.input.Blur()
+		m.pendingDir = dir
+		m.openAgentPick()
+		return m, nil
+
+	case modeInputWtName:
+		dir, err := addWorktree(m.wtRepo, val)
+		if err != nil {
+			m.flash(err.Error(), true)
+			return m, nil
+		}
+		m.wtFlow = false
 		m.mode = modeNormal
 		m.input.Blur()
 		m.pendingDir = dir
@@ -2407,6 +2522,47 @@ func (m *Model) defaultDir() string {
 		return home + "/"
 	}
 	return "/"
+}
+
+// gitToplevel resolves the repository root for a directory.
+func gitToplevel(dir string) (string, error) {
+	out, err := exec.Command("git", "-C", dir, "rev-parse", "--show-toplevel").Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// wtNameRe keeps worktree names safe as a folder name and a branch name.
+var wtNameRe = regexp.MustCompile(`^[A-Za-z0-9._][A-Za-z0-9._/-]{0,80}$`)
+
+// addWorktree creates a git worktree for repo named name and returns its
+// path. The worktree lives OUTSIDE the repo — <repo-parent>/.worktrees/
+// <repo>-<name> by default (AGENTBOSS_WORKTREE_DIR overrides the base) — so
+// agents working in the main checkout never see it. A new branch <name> is
+// created from HEAD; if that branch already exists, it is checked out instead.
+func addWorktree(repo, name string) (string, error) {
+	if !wtNameRe.MatchString(name) || strings.Contains(name, "..") {
+		return "", fmt.Errorf("worktree name: letters, digits, . _ - / only")
+	}
+	base := os.Getenv("AGENTBOSS_WORKTREE_DIR")
+	if base == "" {
+		base = filepath.Join(filepath.Dir(repo), ".worktrees")
+	}
+	dir := filepath.Join(base, filepath.Base(repo)+"-"+strings.ReplaceAll(name, "/", "-"))
+	if _, err := os.Stat(dir); err == nil {
+		return "", fmt.Errorf("already exists: %s", dir)
+	}
+	if err := os.MkdirAll(base, 0o755); err != nil {
+		return "", err
+	}
+	// -b creates the branch; when it already exists, check it out instead.
+	if out, err := exec.Command("git", "-C", repo, "worktree", "add", "-b", name, dir).CombinedOutput(); err != nil {
+		if out2, err2 := exec.Command("git", "-C", repo, "worktree", "add", dir, name).CombinedOutput(); err2 != nil {
+			return "", fmt.Errorf("git worktree add: %s", sanitize.Line(string(out)+" "+string(out2)))
+		}
+	}
+	return dir, nil
 }
 
 func normalizeDir(v string) (string, error) {

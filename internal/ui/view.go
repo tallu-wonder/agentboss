@@ -360,6 +360,9 @@ func fitHints(w int, parts ...string) string {
 func (m *Model) inputLabel() string {
 	switch m.mode {
 	case modeInputDir:
+		if m.wtFlow {
+			return stHeader.Render("repo:")
+		}
 		// The new session lands in the selected row's group — silently, unless
 		// it is said here, where the choice is still one esc away.
 		if g := m.st.Group(m.contextGroup()); g != nil {
@@ -368,6 +371,8 @@ func (m *Model) inputLabel() string {
 				stHeader.Render(":")
 		}
 		return stHeader.Render("dir:")
+	case modeInputWtName:
+		return stHeader.Render("worktree:")
 	case modeInputGroup:
 		return stHeader.Render("group:")
 	case modeRename:
@@ -921,6 +926,7 @@ func (m *Model) viewHelp() string {
 		{"a", "next needing attention"},
 		{"/", "search"},
 		{"n", "new session"},
+		{"W", "new session in a git worktree"},
 		{"i", "import past conversation"},
 		{"N r m", "group / rename / regroup"},
 		{"", "(also renames in the agent)"},
@@ -935,6 +941,7 @@ func (m *Model) viewHelp() string {
 		{"< >", "sidebar width"},
 		{"z, mid-click", "close tab, stays on desk"},
 		{"x", "close to old · in old: delete"},
+		{"u", "reopen what you just closed"},
 		{"q", "quit, sessions live on"},
 	}
 	lines := []string{" " + stHeader.Render("keys"), ""}

@@ -214,6 +214,7 @@ environment:
   AGENTBOSS_NOTIFY         desktop alerts: unset (default) | needsyou | all | off
   AGENTBOSS_NO_HOOKS       set to any value to never touch Claude's settings.json
   AGENTBOSS_PRICING        JSON price table for the cost estimate (see README)
+  AGENTBOSS_WORKTREE_DIR   where W puts git worktrees (default <repo-parent>/.worktrees)
 `)
 }
 

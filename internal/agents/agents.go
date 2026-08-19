@@ -61,6 +61,9 @@ type Provider interface {
 	Installed() bool
 	// ResumeArgs is how to continue an existing conversation.
 	ResumeArgs(sessionID string) []string
+	// ForkArgs is how to start a NEW conversation that begins as a copy of an
+	// existing one. nil when the agent cannot fork.
+	ForkArgs(sessionID string) []string
 	// TranscriptPath locates a conversation's transcript, "" if not found.
 	TranscriptPath(sessionID string) string
 	// ScratchDir is where the agent keeps the session's own working files
@@ -121,6 +124,9 @@ func (claudeProvider) Binary() string {
 func (c claudeProvider) Installed() bool { return installed(c.Binary()) }
 func (claudeProvider) ResumeArgs(sessionID string) []string {
 	return []string{"--resume", sessionID}
+}
+func (claudeProvider) ForkArgs(sessionID string) []string {
+	return []string{"--resume", sessionID, "--fork-session"}
 }
 func (claudeProvider) TranscriptPath(sessionID string) string {
 	return claudesessions.TranscriptPath(sessionID)
@@ -187,6 +193,9 @@ func (codexProvider) Binary() string {
 func (c codexProvider) Installed() bool { return installed(c.Binary()) }
 func (codexProvider) ResumeArgs(sessionID string) []string {
 	return []string{"resume", sessionID}
+}
+func (codexProvider) ForkArgs(sessionID string) []string {
+	return []string{"fork", sessionID}
 }
 func (codexProvider) TranscriptPath(sessionID string) string {
 	return codexsessions.TranscriptPath(sessionID)
