@@ -60,7 +60,7 @@ func serverOptions(t *testing.T) map[string]bool {
 func wantOption(t *testing.T, name, want string) {
 	t.Helper()
 	if known := serverOptions(t); known != nil && !known[name] {
-		t.Logf("%s has no %s option — skipping (agentdeck degrades rather than failing)",
+		t.Logf("%s has no %s option — skipping (agentboss degrades rather than failing)",
 			tmuxVersion(), name)
 		return
 	}

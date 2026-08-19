@@ -6,7 +6,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/tallu-wonder/agentdeck/internal/status"
+	"github.com/tallu-wonder/agentboss/internal/status"
 )
 
 // rowKind distinguishes list rows.

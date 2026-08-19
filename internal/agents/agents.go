@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tallu-wonder/agentdeck/internal/claudesessions"
-	"github.com/tallu-wonder/agentdeck/internal/codexsessions"
-	"github.com/tallu-wonder/agentdeck/internal/state"
-	"github.com/tallu-wonder/agentdeck/internal/status"
+	"github.com/tallu-wonder/agentboss/internal/claudesessions"
+	"github.com/tallu-wonder/agentboss/internal/codexsessions"
+	"github.com/tallu-wonder/agentboss/internal/state"
+	"github.com/tallu-wonder/agentboss/internal/status"
 )
 
 // Info is the agent-neutral view of a session's transcript.
@@ -116,7 +116,7 @@ type claudeProvider struct{}
 func (claudeProvider) Kind() string  { return state.AgentClaude }
 func (claudeProvider) Label() string { return "claude" }
 func (claudeProvider) Binary() string {
-	return lookup("AGENTDECK_CLAUDE_CMD", "claude")
+	return lookup("AGENTBOSS_CLAUDE_CMD", "claude")
 }
 func (c claudeProvider) Installed() bool { return installed(c.Binary()) }
 func (claudeProvider) ResumeArgs(sessionID string) []string {
@@ -182,7 +182,7 @@ type codexProvider struct{}
 func (codexProvider) Kind() string  { return state.AgentCodex }
 func (codexProvider) Label() string { return "codex" }
 func (codexProvider) Binary() string {
-	return lookup("AGENTDECK_CODEX_CMD", "codex")
+	return lookup("AGENTBOSS_CODEX_CMD", "codex")
 }
 func (c codexProvider) Installed() bool { return installed(c.Binary()) }
 func (codexProvider) ResumeArgs(sessionID string) []string {
@@ -242,7 +242,7 @@ func (codexProvider) Rename(sessionID, name string) bool {
 	return codexsessions.SetName(sessionID, name) == nil
 }
 
-// Cost is not estimated for Codex: agentdeck has no trustworthy price table
+// Cost is not estimated for Codex: agentboss has no trustworthy price table
 // for the models Codex runs, and a wrong number is worse than none.
 func (codexProvider) Cost(_ string, prev CostState) CostState { return prev }
 

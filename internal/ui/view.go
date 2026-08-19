@@ -10,8 +10,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/tallu-wonder/agentdeck/internal/state"
-	"github.com/tallu-wonder/agentdeck/internal/status"
+	"github.com/tallu-wonder/agentboss/internal/state"
+	"github.com/tallu-wonder/agentboss/internal/status"
 )
 
 var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
@@ -231,10 +231,10 @@ func (m *Model) overlay(box string) string {
 
 func (m *Model) viewHeader() string {
 	working, needs, attn := m.counts()
-	title := stHeader.Render("agentdeck")
+	title := stHeader.Render("agentboss")
 	if m.unfocused {
 		// Keys are going to the agent right now; a dimmed title is the cue.
-		title = stDim.Render("agentdeck")
+		title = stDim.Render("agentboss")
 	}
 	left := " " + title + " "
 	parts := []string{}
@@ -876,7 +876,7 @@ func (m *Model) viewInfo() string {
 	if !s.LastOpenedAt.IsZero() {
 		lines = append(lines, row("opened", stText.Render(agoLong(s.LastOpenedAt))))
 	}
-	// the conversation's true age, not agentdeck's bookkeeping
+	// the conversation's true age, not agentboss's bookkeeping
 	if born := info.Born; !born.IsZero() {
 		lines = append(lines, row("started", stText.Render(agoLong(born))))
 	} else if !s.CreatedAt.IsZero() {

@@ -2,7 +2,7 @@
 // macOS, the XDG handler elsewhere — or in whatever program the user prefers.
 //
 // It is deliberately fire-and-forget: the folder opens in another application,
-// so agentdeck must never block its event loop waiting for it, and must never
+// so agentboss must never block its event loop waiting for it, and must never
 // let that program write to the terminal it shares with the TUI.
 package reveal
 
@@ -16,7 +16,7 @@ import (
 
 // EnvCmd names the program used to open a folder. It may carry arguments
 // ("code -n", "cursor", "nvim"), and the folder is appended as the last one.
-const EnvCmd = "AGENTDECK_OPEN_CMD"
+const EnvCmd = "AGENTBOSS_OPEN_CMD"
 
 // Command builds the argv that opens dir, without running it. Callers get an
 // error for a folder that no longer exists — a session can outlive the
@@ -53,7 +53,7 @@ func opener() []string {
 
 // Dir opens dir and returns as soon as the program is launched. Its output is
 // discarded and its stdin detached, so a GUI helper or a misconfigured
-// AGENTDECK_OPEN_CMD cannot scribble over the sidebar; the process is reaped in
+// AGENTBOSS_OPEN_CMD cannot scribble over the sidebar; the process is reaped in
 // the background so we leave no zombies behind.
 func Dir(dir string) error {
 	argv, err := Command(dir)

@@ -15,7 +15,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/tallu-wonder/agentdeck/internal/sanitize"
+	"github.com/tallu-wonder/agentboss/internal/sanitize"
 )
 
 // Conversation is one resumable Claude Code session found on disk.
@@ -31,7 +31,7 @@ type Conversation struct {
 
 // projectsDir returns Claude Code's conversation store.
 func projectsDir() string {
-	if d := os.Getenv("AGENTDECK_CLAUDE_PROJECTS"); d != "" {
+	if d := os.Getenv("AGENTBOSS_CLAUDE_PROJECTS"); d != "" {
 		return d
 	}
 	home, err := os.UserHomeDir()
@@ -142,7 +142,7 @@ func TranscriptPath(sessionID string) string {
 //
 //	/tmp/claude-<uid>/<mangled-cwd>/<session-id>/scratchpad
 func scratchRoot() string {
-	if d := os.Getenv("AGENTDECK_CLAUDE_SCRATCH"); d != "" {
+	if d := os.Getenv("AGENTBOSS_CLAUDE_SCRATCH"); d != "" {
 		return d
 	}
 	return filepath.Join("/tmp", "claude-"+strconv.Itoa(os.Getuid()))
@@ -155,7 +155,7 @@ func ScratchDir(sessionID string) string {
 	root := scratchRoot()
 	// The default root lives under /tmp, which any local user can create
 	// entries in. If it isn't ours, a stranger could plant directories (or
-	// symlinks) that agentdeck would then hand to the file manager.
+	// symlinks) that agentboss would then hand to the file manager.
 	if fi, err := os.Stat(root); err != nil || !ownedByUs(fi) {
 		return ""
 	}
@@ -381,7 +381,7 @@ var (
 )
 
 // prices returns the effective table: a JSON file of {"family": [in, out]} per
-// MTok, from AGENTDECK_PRICING or ~/.agentdeck/pricing.json, merged over the
+// MTok, from AGENTBOSS_PRICING or ~/.agentboss/pricing.json, merged over the
 // built-in rates. Anything unparseable is ignored in favour of the built-ins —
 // a broken price file must not stop the desk from working.
 func prices() map[string][2]float64 {
@@ -390,9 +390,9 @@ func prices() map[string][2]float64 {
 		for k, v := range builtinPrices {
 			priceTable[k] = v
 		}
-		path := os.Getenv("AGENTDECK_PRICING")
+		path := os.Getenv("AGENTBOSS_PRICING")
 		if path == "" {
-			path = filepath.Join(agentdeckHome(), "pricing.json")
+			path = filepath.Join(agentbossHome(), "pricing.json")
 		}
 		data, err := os.ReadFile(path)
 		if err != nil {
@@ -411,17 +411,17 @@ func prices() map[string][2]float64 {
 	return priceTable
 }
 
-// agentdeckHome mirrors paths.Home() without importing it, keeping this package
+// agentbossHome mirrors paths.Home() without importing it, keeping this package
 // free of a dependency it otherwise has no use for.
-func agentdeckHome() string {
-	if v := os.Getenv("AGENTDECK_HOME"); v != "" {
+func agentbossHome() string {
+	if v := os.Getenv("AGENTBOSS_HOME"); v != "" {
 		return v
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "."
 	}
-	return filepath.Join(home, ".agentdeck")
+	return filepath.Join(home, ".agentboss")
 }
 
 // price returns USD per MTok (input, output) for a model family. Cache writes
@@ -484,7 +484,7 @@ func CostDelta(path string, from int64) (delta float64, newOff int64, rescanned 
 // (~/.claude/sessions/<pid>.json), which is exactly the name shown in
 // claude's own status badge. Entries whose process is gone are ignored.
 func LiveNames() map[string]string {
-	dir := os.Getenv("AGENTDECK_CLAUDE_SESSIONS")
+	dir := os.Getenv("AGENTBOSS_CLAUDE_SESSIONS")
 	if dir == "" {
 		home, err := os.UserHomeDir()
 		if err != nil {

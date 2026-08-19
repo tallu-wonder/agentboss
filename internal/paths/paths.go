@@ -1,5 +1,5 @@
-// Package paths centralizes every filesystem location agentdeck uses, so the
-// whole app can be pointed at a sandbox via AGENTDECK_HOME (used by tests).
+// Package paths centralizes every filesystem location agentboss uses, so the
+// whole app can be pointed at a sandbox via AGENTBOSS_HOME (used by tests).
 package paths
 
 import (
@@ -7,17 +7,17 @@ import (
 	"path/filepath"
 )
 
-// Home returns the agentdeck data directory (~/.agentdeck by default,
-// overridable with AGENTDECK_HOME).
+// Home returns the agentboss data directory (~/.agentboss by default,
+// overridable with AGENTBOSS_HOME).
 func Home() string {
-	if h := os.Getenv("AGENTDECK_HOME"); h != "" {
+	if h := os.Getenv("AGENTBOSS_HOME"); h != "" {
 		return h
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return ".agentdeck"
+		return ".agentboss"
 	}
-	return filepath.Join(home, ".agentdeck")
+	return filepath.Join(home, ".agentboss")
 }
 
 // StateFile is the persistent desk layout (groups, sessions, order).
@@ -34,9 +34,9 @@ func CmdDir() string { return filepath.Join(Home(), "cmd") }
 
 // CodexSessionsDir is Codex's rollout-transcript store
 // (~/.codex/sessions/<year>/<month>/<day>/rollout-*.jsonl).
-// Overridable with AGENTDECK_CODEX_SESSIONS (used by tests).
+// Overridable with AGENTBOSS_CODEX_SESSIONS (used by tests).
 func CodexSessionsDir() string {
-	if d := os.Getenv("AGENTDECK_CODEX_SESSIONS"); d != "" {
+	if d := os.Getenv("AGENTBOSS_CODEX_SESSIONS"); d != "" {
 		return d
 	}
 	return filepath.Join(codexHome(), "sessions")
@@ -53,7 +53,7 @@ func CodexSessionIndex() string {
 func CodexConfigFile() string { return filepath.Join(codexHome(), "config.toml") }
 
 func codexHome() string {
-	if d := os.Getenv("AGENTDECK_CODEX_HOME"); d != "" {
+	if d := os.Getenv("AGENTBOSS_CODEX_HOME"); d != "" {
 		return d
 	}
 	home, err := os.UserHomeDir()
@@ -63,8 +63,8 @@ func codexHome() string {
 	return filepath.Join(home, ".codex")
 }
 
-// NotifyChainFile records the Codex notify program agentdeck displaced, so
-// `agentdeck codex-notify` can forward every event to it unchanged.
+// NotifyChainFile records the Codex notify program agentboss displaced, so
+// `agentboss codex-notify` can forward every event to it unchanged.
 func NotifyChainFile() string { return filepath.Join(Home(), "codex-notify-chain.json") }
 
 // CrashFile is where the manager records a panic before restarting itself.
@@ -75,7 +75,7 @@ func CrashFile() string { return filepath.Join(Home(), "crash.log") }
 func HostFile() string { return filepath.Join(Home(), "host.json") }
 
 func ClaudeSettingsFile() string {
-	if p := os.Getenv("AGENTDECK_CLAUDE_SETTINGS"); p != "" {
+	if p := os.Getenv("AGENTBOSS_CLAUDE_SETTINGS"); p != "" {
 		return p
 	}
 	home, err := os.UserHomeDir()
@@ -85,7 +85,36 @@ func ClaudeSettingsFile() string {
 	return filepath.Join(home, ".claude", "settings.json")
 }
 
-// EnsureDirs creates the agentdeck directories if missing.
+// MigrateLegacyHome adopts a desk created under this project's pre-rename
+// name: ~/.agentdeck becomes ~/.agentboss, and a symlink is left at the old
+// path so an old binary still on PATH — and Claude Code hooks installed by it,
+// which live processes keep calling — keep writing into the same desk.
+//
+// Only the default locations migrate: an explicit AGENTBOSS_HOME says the
+// caller knows where their desk is.
+func MigrateLegacyHome() {
+	if os.Getenv("AGENTBOSS_HOME") != "" {
+		return
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	oldP, newP := filepath.Join(home, ".agentdeck"), filepath.Join(home, ".agentboss")
+	fi, err := os.Lstat(oldP)
+	if err != nil || fi.Mode()&os.ModeSymlink != 0 {
+		return // nothing there, or already migrated
+	}
+	if _, err := os.Stat(newP); err == nil {
+		return // both exist: never guess which desk is real
+	}
+	if err := os.Rename(oldP, newP); err != nil {
+		return
+	}
+	_ = os.Symlink(newP, oldP)
+}
+
+// EnsureDirs creates the agentboss directories if missing.
 func EnsureDirs() error {
 	// A desk created by an older version (or by hand) may be world-readable.
 	// Tighten it: the folders you work in, your session names and their live

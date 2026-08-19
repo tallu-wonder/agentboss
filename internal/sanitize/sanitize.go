@@ -1,4 +1,4 @@
-// Package sanitize cleans text that agentdeck did not write itself.
+// Package sanitize cleans text that agentboss did not write itself.
 //
 // Session names, summaries, todo items, model ids and hook messages all
 // originate outside the desk — from transcripts an agent wrote, from a prompt

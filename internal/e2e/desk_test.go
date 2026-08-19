@@ -1,6 +1,6 @@
 //go:build e2e
 
-// Package e2e drives a real agentdeck manager inside a real tmux server.
+// Package e2e drives a real agentboss manager inside a real tmux server.
 //
 // The unit tests cover pieces in isolation; these cover the thing that actually
 // breaks — the desk as a whole. Every regression this suite exists for was found
@@ -13,7 +13,7 @@
 //
 // The suite is behind a build tag because it needs tmux, spawns processes, and
 // takes seconds rather than milliseconds. It never touches the developer's own
-// desk: a private tmux socket, a temporary AGENTDECK_HOME, stub agents, and a
+// desk: a private tmux socket, a temporary AGENTBOSS_HOME, stub agents, and a
 // stub notifier and file-opener that record what they were asked to do.
 package e2e
 
@@ -28,18 +28,18 @@ import (
 	"time"
 )
 
-// desk is one isolated agentdeck under test.
+// desk is one isolated agentboss under test.
 type desk struct {
 	t        *testing.T
-	home     string // AGENTDECK_HOME
-	bin      string // the agentdeck binary under test
+	home     string // AGENTBOSS_HOME
+	bin      string // the agentboss binary under test
 	dir      string // sandbox root
 	socket   string // TMUX_TMPDIR for the private server
 	notifLog string
 	openLog  string
 }
 
-// newDesk builds agentdeck, lays out a sandbox, and starts the manager.
+// newDesk builds agentboss, lays out a sandbox, and starts the manager.
 func newDesk(t *testing.T) *desk {
 	t.Helper()
 	if _, err := exec.LookPath("tmux"); err != nil {
@@ -56,7 +56,7 @@ func newDesk(t *testing.T) *desk {
 		dir:      socket,
 		socket:   socket,
 		home:     filepath.Join(socket, "home"),
-		bin:      filepath.Join(socket, "agentdeck"),
+		bin:      filepath.Join(socket, "agentboss"),
 		notifLog: filepath.Join(socket, "notifications.log"),
 		openLog:  filepath.Join(socket, "opened.log"),
 	}
@@ -68,7 +68,7 @@ func newDesk(t *testing.T) *desk {
 	build := exec.Command("go", "build", "-o", d.bin, ".")
 	build.Dir = filepath.Join("..", "..")
 	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("building agentdeck: %v\n%s", err, out)
+		t.Fatalf("building agentboss: %v\n%s", err, out)
 	}
 	d.writeStub("fakeagent", "#!/bin/bash\nexec cat\n")
 	d.writeStub("terminal-notifier", "#!/bin/bash\n{ for a in \"$@\"; do printf '%s\\n' \"$a\"; done; echo ---; } >> "+d.notifLog+"\n")
@@ -102,19 +102,19 @@ func (d *desk) start() {
 		"TERM=xterm-256color",
 		"TERM_PROGRAM=ghostty",
 		"HOME=" + d.dir,
-		"AGENTDECK_HOME=" + d.home,
-		"AGENTDECK_CLAUDE_SETTINGS=" + filepath.Join(d.dir, "settings.json"),
-		"AGENTDECK_CLAUDE_CMD=" + filepath.Join(d.dir, "bin", "fakeagent"),
-		"AGENTDECK_CLAUDE_PROJECTS=" + filepath.Join(d.dir, "projects"),
-		"AGENTDECK_OPEN_CMD=" + filepath.Join(d.dir, "bin", "open"),
+		"AGENTBOSS_HOME=" + d.home,
+		"AGENTBOSS_CLAUDE_SETTINGS=" + filepath.Join(d.dir, "settings.json"),
+		"AGENTBOSS_CLAUDE_CMD=" + filepath.Join(d.dir, "bin", "fakeagent"),
+		"AGENTBOSS_CLAUDE_PROJECTS=" + filepath.Join(d.dir, "projects"),
+		"AGENTBOSS_OPEN_CMD=" + filepath.Join(d.dir, "bin", "open"),
 	}
-	cmd := exec.Command("tmux", "new-session", "-d", "-s", "agentdeck", "-x", "150", "-y", "32", d.bin+" __ui")
+	cmd := exec.Command("tmux", "new-session", "-d", "-s", "agentboss", "-x", "150", "-y", "32", d.bin+" __ui")
 	cmd.Env = env
 	if out, err := cmd.CombinedOutput(); err != nil {
 		d.t.Fatalf("starting the manager: %v\n%s", err, out)
 	}
 	// The sidebar is up once it has drawn its header.
-	d.waitFor("the sidebar to draw", func() bool { return strings.Contains(d.sidebar(), "agentdeck") })
+	d.waitFor("the sidebar to draw", func() bool { return strings.Contains(d.sidebar(), "agentboss") })
 }
 
 func (d *desk) stop() {
@@ -126,7 +126,7 @@ func (d *desk) stop() {
 func (d *desk) keys(keys ...string) {
 	d.t.Helper()
 	for _, k := range keys {
-		if _, err := d.tmux("send-keys", "-t", "agentdeck:0.0", k); err != nil {
+		if _, err := d.tmux("send-keys", "-t", "agentboss:0.0", k); err != nil {
 			d.t.Fatalf("send-keys %q: %v", k, err)
 		}
 		time.Sleep(120 * time.Millisecond)
@@ -136,7 +136,7 @@ func (d *desk) keys(keys ...string) {
 // literal types text without interpreting it as key names.
 func (d *desk) literal(text string) {
 	d.t.Helper()
-	if _, err := d.tmux("send-keys", "-t", "agentdeck:0.0", "-l", "--", text); err != nil {
+	if _, err := d.tmux("send-keys", "-t", "agentboss:0.0", "-l", "--", text); err != nil {
 		d.t.Fatal(err)
 	}
 	time.Sleep(120 * time.Millisecond)
@@ -144,13 +144,13 @@ func (d *desk) literal(text string) {
 
 // sidebar is the manager pane's visible text.
 func (d *desk) sidebar() string {
-	out, _ := d.tmux("capture-pane", "-p", "-t", "agentdeck:0.0")
+	out, _ := d.tmux("capture-pane", "-p", "-t", "agentboss:0.0")
 	return out
 }
 
 // tabs is the tab bar as tmux stores it, styling stripped.
 func (d *desk) tabs() string {
-	out, _ := d.tmux("show-options", "-t", "=agentdeck:", "-v", "status-format[0]")
+	out, _ := d.tmux("show-options", "-t", "=agentboss:", "-v", "status-format[0]")
 	for {
 		i := strings.Index(out, "#[")
 		if i < 0 {
@@ -225,7 +225,7 @@ func (d *desk) newSession(name string) string {
 func (d *desk) hook(id, payload string) {
 	d.t.Helper()
 	cmd := exec.Command(d.bin, "hook")
-	cmd.Env = append(os.Environ(), "AGENTDECK_HOME="+d.home, "AGENTDECK_ID="+id,
+	cmd.Env = append(os.Environ(), "AGENTBOSS_HOME="+d.home, "AGENTBOSS_ID="+id,
 		"TMUX_TMPDIR="+d.socket)
 	cmd.Stdin = strings.NewReader(payload)
 	if out, err := cmd.CombinedOutput(); err != nil {
@@ -449,7 +449,7 @@ func TestHostileNameIsRenderedInert(t *testing.T) {
 
 // rawTabs is the tab bar with styling intact, for checking escaping.
 func (d *desk) rawTabs() string {
-	out, _ := d.tmux("show-options", "-t", "=agentdeck:", "-v", "status-format[0]")
+	out, _ := d.tmux("show-options", "-t", "=agentboss:", "-v", "status-format[0]")
 	return out
 }
 
@@ -475,7 +475,7 @@ func TestQuitLeavesSessionsRunning(t *testing.T) {
 
 	d.keys("q", "y") // quit asks first
 	d.waitFor("the manager session to go", func() bool {
-		out, _ := d.tmux("has-session", "-t", "=agentdeck:")
+		out, _ := d.tmux("has-session", "-t", "=agentboss:")
 		return strings.Contains(out, "can't find") || strings.Contains(out, "no server")
 	})
 	live := d.liveSessions()
@@ -493,7 +493,7 @@ func TestDeskSurvivesAManagerRestart(t *testing.T) {
 
 	d.keys("q", "y") // quit asks first
 	d.waitFor("the manager to exit", func() bool {
-		out, _ := d.tmux("has-session", "-t", "=agentdeck:")
+		out, _ := d.tmux("has-session", "-t", "=agentboss:")
 		return strings.Contains(out, "can't find") || strings.Contains(out, "no server")
 	})
 	d.start()
@@ -510,7 +510,7 @@ func TestDeskSurvivesAManagerRestart(t *testing.T) {
 func TestSecondManagerRefusesToStart(t *testing.T) {
 	d := newDesk(t)
 	cmd := exec.Command(d.bin, "__ui")
-	cmd.Env = append(os.Environ(), "AGENTDECK_HOME="+d.home, "TMUX_TMPDIR="+d.socket,
+	cmd.Env = append(os.Environ(), "AGENTBOSS_HOME="+d.home, "TMUX_TMPDIR="+d.socket,
 		"TERM=xterm-256color")
 	out, err := cmd.CombinedOutput()
 	if err == nil {
@@ -565,7 +565,7 @@ func TestCycleKeysWorkFromInsideAnAgent(t *testing.T) {
 
 	// Focus stays in the viewport — where an agent, not the sidebar, has the keys.
 	viewport := ""
-	out, _ := d.tmux("list-panes", "-t", "agentdeck:", "-F", "#{pane_id} #{@agentdeck_role}")
+	out, _ := d.tmux("list-panes", "-t", "agentboss:", "-F", "#{pane_id} #{@agentboss_role}")
 	for _, l := range strings.Split(out, "\n") {
 		if id, role, ok := strings.Cut(strings.TrimSpace(l), " "); ok && role == "viewport" {
 			viewport = id
@@ -580,7 +580,7 @@ func TestCycleKeysWorkFromInsideAnAgent(t *testing.T) {
 
 	// A client must exist for a key binding to fire, so attach one.
 	if _, err := d.tmux("new-session", "-d", "-s", "holder", "-x", "160", "-y", "40",
-		"TMUX= tmux attach-session -t agentdeck"); err != nil {
+		"TMUX= tmux attach-session -t agentboss"); err != nil {
 		t.Fatal(err)
 	}
 	time.Sleep(1500 * time.Millisecond)
@@ -628,7 +628,7 @@ func TestCycleKeysWorkFromInsideAnAgent(t *testing.T) {
 		t.Errorf("csi-u alt+[ should have returned to %s, got %s", before, back)
 	}
 	// And the keyboard must still belong to the agent, not the sidebar.
-	role, _ := d.tmux("display-message", "-p", "-t", "agentdeck:", "#{@agentdeck_role}")
+	role, _ := d.tmux("display-message", "-p", "-t", "agentboss:", "#{@agentboss_role}")
 	if strings.TrimSpace(role) != "viewport" {
 		t.Errorf("focus moved out of the agent pane: role=%q", strings.TrimSpace(role))
 	}

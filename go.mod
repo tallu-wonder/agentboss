@@ -1,4 +1,4 @@
-module github.com/tallu-wonder/agentdeck
+module github.com/tallu-wonder/agentboss
 
 go 1.25.0
 

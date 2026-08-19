@@ -6,9 +6,9 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/tallu-wonder/agentdeck/internal/state"
-	"github.com/tallu-wonder/agentdeck/internal/status"
-	"github.com/tallu-wonder/agentdeck/internal/tmuxctl"
+	"github.com/tallu-wonder/agentboss/internal/state"
+	"github.com/tallu-wonder/agentboss/internal/status"
+	"github.com/tallu-wonder/agentboss/internal/tmuxctl"
 )
 
 func ansiWidth(s string) int { return ansi.StringWidth(s) }

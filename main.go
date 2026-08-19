@@ -1,4 +1,4 @@
-// agentdeck — a persistent work desk for coding-agent sessions.
+// agentboss — a persistent work desk for coding-agent sessions.
 //
 // It manages sessions of more than one agent CLI (Claude Code and Codex) on one
 // screen. Every session runs inside its own tmux session (so it survives closed
@@ -9,11 +9,11 @@
 //
 // Subcommands:
 //
-//	agentdeck               launch (or jump to) the manager UI inside tmux
-//	agentdeck hook          [internal] invoked by Claude Code hooks
-//	agentdeck install-hooks (re)install status hooks into Claude settings
-//	agentdeck codex-notify  [internal] invoked by Codex's notify hook
-//	agentdeck __ui          [internal] the manager UI, run inside tmux
+//	agentboss               launch (or jump to) the manager UI inside tmux
+//	agentboss hook          [internal] invoked by Claude Code hooks
+//	agentboss install-hooks (re)install status hooks into Claude settings
+//	agentboss codex-notify  [internal] invoked by Codex's notify hook
+//	agentboss __ui          [internal] the manager UI, run inside tmux
 package main
 
 import (
@@ -31,14 +31,14 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/tallu-wonder/agentdeck/internal/codexnotify"
-	"github.com/tallu-wonder/agentdeck/internal/hooks"
-	"github.com/tallu-wonder/agentdeck/internal/notify"
-	"github.com/tallu-wonder/agentdeck/internal/paths"
-	"github.com/tallu-wonder/agentdeck/internal/state"
-	"github.com/tallu-wonder/agentdeck/internal/status"
-	"github.com/tallu-wonder/agentdeck/internal/tmuxctl"
-	"github.com/tallu-wonder/agentdeck/internal/ui"
+	"github.com/tallu-wonder/agentboss/internal/codexnotify"
+	"github.com/tallu-wonder/agentboss/internal/hooks"
+	"github.com/tallu-wonder/agentboss/internal/notify"
+	"github.com/tallu-wonder/agentboss/internal/paths"
+	"github.com/tallu-wonder/agentboss/internal/state"
+	"github.com/tallu-wonder/agentboss/internal/status"
+	"github.com/tallu-wonder/agentboss/internal/tmuxctl"
+	"github.com/tallu-wonder/agentboss/internal/ui"
 )
 
 // version is the fallback for builds made outside the module system (a plain
@@ -81,10 +81,10 @@ func buildVersion() string {
 }
 
 // returnKey is the prefix-less tmux binding that jumps back to the manager
-// from inside any session. Overridable with AGENTDECK_RETURN_KEY (tmux key
+// from inside any session. Overridable with AGENTBOSS_RETURN_KEY (tmux key
 // syntax, e.g. "C-Space").
 func returnKey() string {
-	if k := os.Getenv("AGENTDECK_RETURN_KEY"); k != "" {
+	if k := os.Getenv("AGENTBOSS_RETURN_KEY"); k != "" {
 		return k
 	}
 	return `C-\`
@@ -101,10 +101,10 @@ func returnKey() string {
 // the pause, or set these to something else.
 func cycleKeys() (prev, next string) {
 	prev, next = "M-[", "M-]"
-	if k := os.Getenv("AGENTDECK_PREV_KEY"); k != "" {
+	if k := os.Getenv("AGENTBOSS_PREV_KEY"); k != "" {
 		prev = k
 	}
-	if k := os.Getenv("AGENTDECK_NEXT_KEY"); k != "" {
+	if k := os.Getenv("AGENTBOSS_NEXT_KEY"); k != "" {
 		next = k
 	}
 	return prev, next
@@ -173,7 +173,7 @@ func main() {
 		}
 		runTabOld(arg)
 	case "version", "--version", "-v":
-		fmt.Println("agentdeck", buildVersion())
+		fmt.Println("agentboss", buildVersion())
 	case "help", "--help", "-h":
 		usage()
 	default:
@@ -181,44 +181,44 @@ func main() {
 		err = fmt.Errorf("unknown command %q", cmd)
 	}
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "agentdeck:", err)
+		fmt.Fprintln(os.Stderr, "agentboss:", err)
 		os.Exit(1)
 	}
 }
 
 func usage() {
-	fmt.Print(`agentdeck — a persistent work desk for Claude Code and Codex sessions
+	fmt.Print(`agentboss — a persistent work desk for Claude Code and Codex sessions
 
 usage:
-  agentdeck                open the manager (from anywhere; wraps itself in tmux)
-  agentdeck install-hooks  (re)install Claude Code status hooks
-  agentdeck install-codex-notify
-                           chain agentdeck into Codex's notify hook
-  agentdeck uninstall-codex-notify
-                           restore the notify program agentdeck displaced
-  agentdeck focus <id>     show a session (what a notification click runs)
-  agentdeck version        print version
+  agentboss                open the manager (from anywhere; wraps itself in tmux)
+  agentboss install-hooks  (re)install Claude Code status hooks
+  agentboss install-codex-notify
+                           chain agentboss into Codex's notify hook
+  agentboss uninstall-codex-notify
+                           restore the notify program agentboss displaced
+  agentboss focus <id>     show a session (what a notification click runs)
+  agentboss version        print version
 
 environment:
-  AGENTDECK_HOME           data dir (default ~/.agentdeck)
-  AGENTDECK_CLAUDE_CMD     claude binary to launch (default: "claude" from PATH)
-  AGENTDECK_CODEX_CMD      codex binary to launch (default: "codex" from PATH)
-  AGENTDECK_RETURN_KEY     key that returns to the manager, in tmux syntax
+  AGENTBOSS_HOME           data dir (default ~/.agentboss)
+  AGENTBOSS_CLAUDE_CMD     claude binary to launch (default: "claude" from PATH)
+  AGENTBOSS_CODEX_CMD      codex binary to launch (default: "codex" from PATH)
+  AGENTBOSS_RETURN_KEY     key that returns to the manager, in tmux syntax
                            (default C-\, i.e. ctrl+\)
-  AGENTDECK_PREV_KEY       previous session, works inside an agent, tmux syntax
+  AGENTBOSS_PREV_KEY       previous session, works inside an agent, tmux syntax
                            (default M-[, i.e. opt/alt+[)
-  AGENTDECK_NEXT_KEY       next session, works inside an agent, tmux syntax
+  AGENTBOSS_NEXT_KEY       next session, works inside an agent, tmux syntax
                            (default M-], i.e. opt/alt+])
-  AGENTDECK_CODEX_HOME     where Codex config + sessions live (default ~/.codex)
-  AGENTDECK_OPEN_CMD       program that opens folders (default: open / xdg-open)
-  AGENTDECK_NOTIFY         desktop alerts: unset (default) | needsyou | all | off
-  AGENTDECK_NO_HOOKS       set to any value to never touch Claude's settings.json
-  AGENTDECK_PRICING        JSON price table for the cost estimate (see README)
+  AGENTBOSS_CODEX_HOME     where Codex config + sessions live (default ~/.codex)
+  AGENTBOSS_OPEN_CMD       program that opens folders (default: open / xdg-open)
+  AGENTBOSS_NOTIFY         desktop alerts: unset (default) | needsyou | all | off
+  AGENTBOSS_NO_HOOKS       set to any value to never touch Claude's settings.json
+  AGENTBOSS_PRICING        JSON price table for the cost estimate (see README)
 `)
 }
 
 // bootstrap gets the user into the manager UI regardless of where they ran
-// agentdeck: outside tmux it execs into a tmux session hosting the UI; inside
+// agentboss: outside tmux it execs into a tmux session hosting the UI; inside
 // tmux it creates the manager session if needed and switches the client.
 func bootstrap() error {
 	if !tmuxctl.Available() {
@@ -290,7 +290,7 @@ func releaseManagerLock() {
 	managerLock = nil
 }
 
-// acquireManagerLock guarantees a single manager per AGENTDECK_HOME: two
+// acquireManagerLock guarantees a single manager per AGENTBOSS_HOME: two
 // managers would fight over state.json, last writer winning.
 func acquireManagerLock() error {
 	f, err := os.OpenFile(filepath.Join(paths.Home(), "manager.lock"), os.O_CREATE|os.O_RDWR, 0o600)
@@ -299,7 +299,7 @@ func acquireManagerLock() error {
 	}
 	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		f.Close()
-		return fmt.Errorf("another agentdeck manager is already running (tmux session %q)", tmuxctl.ManagerSession)
+		return fmt.Errorf("another agentboss manager is already running (tmux session %q)", tmuxctl.ManagerSession)
 	}
 	managerLock = f
 	return nil
@@ -307,6 +307,7 @@ func acquireManagerLock() error {
 
 // runUI starts the manager TUI (already inside tmux).
 func runUI() error {
+	paths.MigrateLegacyHome()
 	if err := paths.EnsureDirs(); err != nil {
 		return err
 	}
@@ -314,20 +315,20 @@ func runUI() error {
 		return err
 	}
 	// Hook installation is normally automatic, but it edits a file the user
-	// owns. AGENTDECK_NO_HOOKS is how someone who removed the entries on
+	// owns. AGENTBOSS_NO_HOOKS is how someone who removed the entries on
 	// purpose keeps them removed, instead of having them reappear every start.
 	firstRun := false
-	if os.Getenv("AGENTDECK_NO_HOOKS") == "" {
+	if os.Getenv("AGENTBOSS_NO_HOOKS") == "" {
 		var err error
 		firstRun, err = installHooks(false)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "agentdeck: warning: could not install Claude hooks:", err)
+			fmt.Fprintln(os.Stderr, "agentboss: warning: could not install Claude hooks:", err)
 		}
 	}
 	// Codex's notify slot holds exactly ONE program, and other tools manage it
-	// too, so agentdeck never edits it unattended — two notify keys make Codex
+	// too, so agentboss never edits it unattended — two notify keys make Codex
 	// refuse to start. Codex status comes from its transcript by default; run
-	// `agentdeck install-codex-notify` to chain in for event-driven status.
+	// `agentboss install-codex-notify` to chain in for event-driven status.
 	self, err := os.Executable()
 	if err != nil {
 		return err
@@ -345,7 +346,7 @@ func runUI() error {
 		return err
 	}
 
-	claudeBin := os.Getenv("AGENTDECK_CLAUDE_CMD")
+	claudeBin := os.Getenv("AGENTBOSS_CLAUDE_CMD")
 	if claudeBin == "" {
 		claudeBin, err = exec.LookPath("claude")
 		if err != nil {
@@ -355,7 +356,7 @@ func runUI() error {
 
 	defer releaseManagerLock()
 	err = superviseUI(st, claudeBin, self, firstRun)
-	// Quitting the manager closes the whole agentdeck window (viewport
+	// Quitting the manager closes the whole agentboss window (viewport
 	// included); the agents keep running detached.
 	_ = tmuxctl.KillSession(tmuxctl.ManagerSession)
 	return err
@@ -398,7 +399,7 @@ func superviseUI(st *state.State, claudeBin, self string, firstRun bool) error {
 		}
 		if len(crashes) >= crashBurst {
 			fmt.Fprintf(os.Stderr,
-				"agentdeck: the sidebar crashed %d times in under a minute; giving up.\n"+
+				"agentboss: the sidebar crashed %d times in under a minute; giving up.\n"+
 					"Your sessions are still running — see %s\n", len(crashes), paths.CrashFile())
 			return fmt.Errorf("sidebar crashed repeatedly")
 		}
@@ -442,7 +443,7 @@ func writeCrashReport(reason any, stack []byte) {
 func runViewportPlaceholder() {
 	fmt.Print("\x1b[2J\x1b[H\n\n\n")
 	for _, l := range []string{
-		"\x1b[1;36m   agentdeck\x1b[0m",
+		"\x1b[1;36m   agentboss\x1b[0m",
 		"",
 		"   no session open",
 		"",
@@ -558,7 +559,7 @@ func queueCmd(op, from, to string) {
 }
 
 // runCodexNotify handles one Codex notify event: forward it to whatever
-// program agentdeck displaced, then record the session's status. Silent and
+// program agentboss displaced, then record the session's status. Silent and
 // non-blocking by design — Codex waits on this process.
 func runCodexNotify(args []string) {
 	codexnotify.Forward(args)
@@ -572,7 +573,7 @@ func runCodexNotify(args []string) {
 		return
 	}
 	// Match the event to a desk entry: by the Codex thread id when we already
-	// know it, else by the AGENTDECK_ID of the session we launched (which is
+	// know it, else by the AGENTBOSS_ID of the session we launched (which is
 	// how we learn the thread id in the first place).
 	var target *state.Session
 	if ev.ThreadID != "" {
@@ -585,7 +586,7 @@ func runCodexNotify(args []string) {
 		}
 	}
 	if target == nil {
-		if id := os.Getenv("AGENTDECK_ID"); id != "" {
+		if id := os.Getenv("AGENTBOSS_ID"); id != "" {
 			if s := st.Session(id); s != nil && s.AgentOf() == state.AgentCodex {
 				target = s
 			}
@@ -624,7 +625,7 @@ func hasFlag(argv []string, flag string) bool {
 	return false
 }
 
-// installCodexNotify chains agentdeck into Codex's notify hook.
+// installCodexNotify chains agentboss into Codex's notify hook.
 func installCodexNotify(verbose, force bool) error {
 	self, err := os.Executable()
 	if err != nil {
@@ -780,7 +781,7 @@ func runTab(arg string) {
 	}
 }
 
-// installHooks ensures agentdeck's hooks are registered in Claude Code
+// installHooks ensures agentboss's hooks are registered in Claude Code
 // settings; returns whether anything was added.
 func installHooks(verbose bool) (bool, error) {
 	self, err := os.Executable()
@@ -797,9 +798,9 @@ func installHooks(verbose bool) (bool, error) {
 	}
 	if verbose {
 		if changed {
-			fmt.Println("installed agentdeck hooks into", settings)
+			fmt.Println("installed agentboss hooks into", settings)
 		} else {
-			fmt.Println("agentdeck hooks already installed in", settings)
+			fmt.Println("agentboss hooks already installed in", settings)
 		}
 	}
 	return changed, nil
@@ -809,9 +810,9 @@ func installHooks(verbose bool) (bool, error) {
 // stdout of some hooks is injected into Claude's context, and a non-zero
 // exit can block Claude's turn. All failures are swallowed deliberately.
 func runHook() {
-	id := os.Getenv("AGENTDECK_ID")
+	id := os.Getenv("AGENTBOSS_ID")
 	if id == "" || !state.ValidID(id) {
-		return // not an agentdeck-managed session, or a tampered id
+		return // not an agentboss-managed session, or a tampered id
 	}
 	data, err := io.ReadAll(io.LimitReader(os.Stdin, 1<<20))
 	if err != nil {

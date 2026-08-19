@@ -3,7 +3,7 @@
 //
 // The click action is the whole point: a notification that only says "something
 // happened" still leaves you hunting through thirty sessions. So the preferred
-// backend is terminal-notifier, whose -execute runs `agentdeck focus <id>` when
+// backend is terminal-notifier, whose -execute runs `agentboss focus <id>` when
 // the notification is clicked. Where that isn't installed we still notify (via
 // AppleScript on macOS, notify-send on Linux) but say so, rather than silently
 // dropping the feature.
@@ -32,7 +32,7 @@ const (
 type Alert struct {
 	SessionID string
 	Name      string
-	Folder    string // display form, e.g. "~/GitHub/agentdeck"
+	Folder    string // display form, e.g. "~/GitHub/agentboss"
 	Agent     string // "claude" | "codex"
 	Kind      Kind
 }
@@ -44,7 +44,7 @@ type Alert struct {
 // mode here, because whether you are looking at the desk cannot be detected:
 // terminals report focus per window, so another tab of the same terminal is
 // indistinguishable from the desk itself.
-const EnvMode = "AGENTDECK_NOTIFY"
+const EnvMode = "AGENTBOSS_NOTIFY"
 
 // safeID guards the one field that reaches a shell: terminal-notifier's
 // -execute takes a command STRING, so a session id containing shell syntax
@@ -128,7 +128,7 @@ func Detect() Backend {
 	return Backend{}
 }
 
-// Send posts one notification. selfBin is the agentdeck binary that a click
+// Send posts one notification. selfBin is the agentboss binary that a click
 // should re-invoke. It never blocks: the notifier is launched and reaped in the
 // background, because this runs inside the manager's event loop.
 func Send(selfBin string, a Alert) error {
@@ -157,7 +157,7 @@ func Send(selfBin string, a Alert) error {
 			"-message", body,
 			// One slot per session: a new alert replaces that session's old
 			// one instead of stacking up while you're away.
-			"-group", "agentdeck:" + a.SessionID,
+			"-group", "agentboss:" + a.SessionID,
 		}
 		if a.Kind == NeedsYou {
 			argv = append(argv, "-sound", "default")
@@ -170,7 +170,7 @@ func Send(selfBin string, a Alert) error {
 			"display notification %s with title %s subtitle %s",
 			appleStr(body), appleStr(title), appleStr(subtitle))}
 	default: // notify-send
-		argv = []string{"-a", "agentdeck", title + " — " + subtitle, body}
+		argv = []string{"-a", "agentboss", title + " — " + subtitle, body}
 	}
 
 	cmd := exec.Command(b.Program, argv...)

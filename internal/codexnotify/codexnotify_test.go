@@ -22,11 +22,11 @@ command = "/usr/local/bin/node_repl"
 func setup(t *testing.T, cfg string) string {
 	t.Helper()
 	home := t.TempDir()
-	t.Setenv("AGENTDECK_HOME", filepath.Join(home, "deck"))
+	t.Setenv("AGENTBOSS_HOME", filepath.Join(home, "deck"))
 	os.MkdirAll(filepath.Join(home, "deck"), 0o755)
 	codex := filepath.Join(home, "codex")
 	os.MkdirAll(codex, 0o755)
-	t.Setenv("AGENTDECK_CODEX_HOME", codex)
+	t.Setenv("AGENTBOSS_CODEX_HOME", codex)
 	if cfg != "" {
 		if err := os.WriteFile(filepath.Join(codex, "config.toml"), []byte(cfg), 0o644); err != nil {
 			t.Fatal(err)
@@ -37,7 +37,7 @@ func setup(t *testing.T, cfg string) string {
 
 func TestInstallChainsAndPreservesExistingNotify(t *testing.T) {
 	cfgPath := setup(t, realConfig)
-	what, err := Install("/bin/agentdeck", true)
+	what, err := Install("/bin/agentboss", true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +47,7 @@ func TestInstallChainsAndPreservesExistingNotify(t *testing.T) {
 	out, _ := os.ReadFile(cfgPath)
 	got := string(out)
 
-	if !strings.Contains(got, `notify = ["/bin/agentdeck", "codex-notify"]`) {
+	if !strings.Contains(got, `notify = ["/bin/agentboss", "codex-notify"]`) {
 		t.Fatalf("notify not rewritten:\n%s", got)
 	}
 	// Everything unrelated survives.
@@ -64,40 +64,40 @@ func TestInstallChainsAndPreservesExistingNotify(t *testing.T) {
 		t.Fatalf("chain not recorded: %+v", chain)
 	}
 	// A backup of the original exists.
-	if _, err := os.Stat(cfgPath + ".agentdeck-backup"); err != nil {
+	if _, err := os.Stat(cfgPath + ".agentboss-backup"); err != nil {
 		t.Fatal("no backup written")
 	}
-	if !Installed("/bin/agentdeck") {
+	if !Installed("/bin/agentboss") {
 		t.Fatal("Installed() should report true")
 	}
 	// Idempotent.
-	if what, err := Install("/bin/agentdeck", true); err != nil || what != "already installed" {
+	if what, err := Install("/bin/agentboss", true); err != nil || what != "already installed" {
 		t.Fatalf("second install = %q, %v", what, err)
 	}
 }
 
 func TestUninstallRestoresOriginal(t *testing.T) {
 	cfgPath := setup(t, realConfig)
-	if _, err := Install("/bin/agentdeck", true); err != nil {
+	if _, err := Install("/bin/agentboss", true); err != nil {
 		t.Fatal(err)
 	}
 	if err := Uninstall(); err != nil {
 		t.Fatal(err)
 	}
 	out, _ := os.ReadFile(cfgPath)
-	if !strings.Contains(string(out), "TurnBell") || strings.Contains(string(out), "agentdeck") {
+	if !strings.Contains(string(out), "TurnBell") || strings.Contains(string(out), "agentboss") {
 		t.Fatalf("original notify not restored:\n%s", out)
 	}
 }
 
 func TestInstallWithNoExistingNotify(t *testing.T) {
 	cfgPath := setup(t, "model = 'gpt-5.6-sol'\n\n[mcp_servers]\n")
-	if _, err := Install("/bin/agentdeck", false); err != nil {
+	if _, err := Install("/bin/agentboss", false); err != nil {
 		t.Fatal(err)
 	}
 	out, _ := os.ReadFile(cfgPath)
 	got := string(out)
-	if !strings.Contains(got, `notify = ["/bin/agentdeck", "codex-notify"]`) {
+	if !strings.Contains(got, `notify = ["/bin/agentboss", "codex-notify"]`) {
 		t.Fatalf("notify not added:\n%s", got)
 	}
 	// The assignment must precede any [table] header, or TOML would scope it
@@ -134,27 +134,27 @@ func TestForwardIsSafeWithoutChain(t *testing.T) {
 }
 
 // chainedByAnotherTool is the shape a competing tool leaves behind: it takes the
-// notify slot back and embeds agentdeck's argv as an escaped JSON string. The
+// notify slot back and embeds agentboss's argv as an escaped JSON string. The
 // ']' inside that string is what a careless pattern stops at, and failing to see
 // this line as a notify assignment means writing a second one — a duplicate TOML
 // key, which stops Codex from starting.
 const chainedByAnotherTool = `model = 'gpt-5.6-sol'
-notify = ["/Applications/TurnBell.app/Contents/MacOS/TurnBell", "turn-ended", "--previous-notify", "[\"\\/Users\\/me\\/.local\\/bin\\/agentdeck\",\"codex-notify\"]"]
+notify = ["/Applications/TurnBell.app/Contents/MacOS/TurnBell", "turn-ended", "--previous-notify", "[\"\\/Users\\/me\\/.local\\/bin\\/agentboss\",\"codex-notify\"]"]
 
 [mcp_servers]
 `
 
 func TestInstallRefusesToFightAnotherToolForTheSlot(t *testing.T) {
 	cfgPath := setup(t, realConfig)
-	if _, err := Install("/bin/agentdeck", false); err == nil {
+	if _, err := Install("/bin/agentboss", false); err == nil {
 		t.Fatal("must refuse to displace another program without --force")
 	}
 	body, _ := os.ReadFile(cfgPath)
-	if strings.Contains(string(body), "agentdeck") {
+	if strings.Contains(string(body), "agentboss") {
 		t.Fatalf("config must be untouched on refusal:\n%s", body)
 	}
 	// With --force it chains, as before.
-	if _, err := Install("/bin/agentdeck", true); err != nil {
+	if _, err := Install("/bin/agentboss", true); err != nil {
 		t.Fatal(err)
 	}
 	if n := len(notifyLines(cfgPath)); n != 1 {
@@ -164,12 +164,12 @@ func TestInstallRefusesToFightAnotherToolForTheSlot(t *testing.T) {
 
 func TestRecognizesBeingChainedByAnotherTool(t *testing.T) {
 	cfgPath := setup(t, chainedByAnotherTool)
-	// The other tool forwards to agentdeck, so its events already arrive; adding
+	// The other tool forwards to agentboss, so its events already arrive; adding
 	// a second notify line would be a duplicate key and stop Codex starting.
-	if !Installed("/Users/me/.local/bin/agentdeck") {
-		t.Fatal("a notify line that forwards to agentdeck must count as installed")
+	if !Installed("/Users/me/.local/bin/agentboss") {
+		t.Fatal("a notify line that forwards to agentboss must count as installed")
 	}
-	what, err := Install("/Users/me/.local/bin/agentdeck", true)
+	what, err := Install("/Users/me/.local/bin/agentboss", true)
 	if err != nil || what != "already installed" {
 		t.Fatalf("Install = %q, %v; want a no-op", what, err)
 	}
@@ -180,7 +180,7 @@ func TestRecognizesBeingChainedByAnotherTool(t *testing.T) {
 
 func TestInstallRefusesWhenTheFileAlreadyHasDuplicates(t *testing.T) {
 	setup(t, "notify = [\"/a\"]\nnotify = [\"/b\"]\n")
-	if _, err := Install("/bin/agentdeck", true); err == nil {
+	if _, err := Install("/bin/agentboss", true); err == nil {
 		t.Fatal("must refuse to edit a config Codex cannot parse")
 	}
 }

@@ -75,11 +75,11 @@ func TestAppleStrEscapes(t *testing.T) {
 }
 
 func TestShellQuote(t *testing.T) {
-	if got := shellQuote("/usr/local/bin/agentdeck"); got != "'/usr/local/bin/agentdeck'" {
+	if got := shellQuote("/usr/local/bin/agentboss"); got != "'/usr/local/bin/agentboss'" {
 		t.Errorf("got %s", got)
 	}
 	// A path containing a quote must stay one shell word.
-	if got := shellQuote("/tmp/it's/agentdeck"); got != `'/tmp/it'\''s/agentdeck'` {
+	if got := shellQuote("/tmp/it's/agentboss"); got != `'/tmp/it'\''s/agentboss'` {
 		t.Errorf("got %s", got)
 	}
 }
@@ -129,7 +129,7 @@ func TestSendDoesNotBlock(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- Send("/bin/agentdeck", Alert{SessionID: "s_1", Name: "n", Kind: NeedsYou})
+		done <- Send("/bin/agentboss", Alert{SessionID: "s_1", Name: "n", Kind: NeedsYou})
 	}()
 	select {
 	case err := <-done:
@@ -151,7 +151,7 @@ func TestSendRespectsOff(t *testing.T) {
 	}
 	t.Setenv("PATH", dir)
 	t.Setenv(EnvMode, "off")
-	if err := Send("/bin/agentdeck", Alert{SessionID: "s_1", Kind: NeedsYou}); err != nil {
+	if err := Send("/bin/agentboss", Alert{SessionID: "s_1", Kind: NeedsYou}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(stamp); err == nil {

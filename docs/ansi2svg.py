@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Render a terminal capture (ANSI SGR) as a self-contained SVG.
 
-Written for agentdeck's README: the screenshot is the real TUI, captured from a
+Written for agentboss's README: the screenshot is the real TUI, captured from a
 real tmux client, rather than a mock-up. Each styled run becomes one <tspan>
 pinned to its column with textLength, so glyph-width differences between the
 viewer's monospace font and the capture never accumulate into drift.
@@ -213,7 +213,7 @@ def render(lines, title):
 
 if __name__ == "__main__":
     src, dst = sys.argv[1], sys.argv[2]
-    title = sys.argv[3] if len(sys.argv) > 3 else "agentdeck"
+    title = sys.argv[3] if len(sys.argv) > 3 else "agentboss"
     with open(src, encoding="utf-8", errors="replace") as f:
         lines = [l.rstrip("\n") for l in f]
     while lines and not lines[-1].strip():

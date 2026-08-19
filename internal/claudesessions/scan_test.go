@@ -42,7 +42,7 @@ func TestTitleFallsBackToFirstUserMessage(t *testing.T) {
 
 func TestTranscriptPathFindsAcrossProjects(t *testing.T) {
 	root := t.TempDir()
-	t.Setenv("AGENTDECK_CLAUDE_PROJECTS", root)
+	t.Setenv("AGENTBOSS_CLAUDE_PROJECTS", root)
 	writeTranscript(t, root, "-proj-a", "aaa", "{}\n")
 	want := writeTranscript(t, root, "-proj-b", "bbb", "{}\n")
 	if got := TranscriptPath("bbb"); got != want {
@@ -68,7 +68,7 @@ func TestTitlePrefersExplicitSessionName(t *testing.T) {
 
 func TestAppendRenameRoundTrip(t *testing.T) {
 	root := t.TempDir()
-	t.Setenv("AGENTDECK_CLAUDE_PROJECTS", root)
+	t.Setenv("AGENTBOSS_CLAUDE_PROJECTS", root)
 	p := writeTranscript(t, root, "-proj", "sid-4",
 		`{"type":"user","cwd":"/tmp","message":{"role":"user","content":"first message"}}`+"\n")
 	if err := AppendRename("sid-4", "shiny new name"); err != nil {
@@ -86,7 +86,7 @@ func TestAppendRenameRoundTrip(t *testing.T) {
 
 func TestScanExtractsTitlesAndDirs(t *testing.T) {
 	root := t.TempDir()
-	t.Setenv("AGENTDECK_CLAUDE_PROJECTS", root)
+	t.Setenv("AGENTBOSS_CLAUDE_PROJECTS", root)
 	writeTranscript(t, root, "-p", "s1", `{"type":"summary","summary":"Nice title"}
 {"type":"user","cwd":"/tmp","message":{"role":"user","content":"x"}}`+"\n")
 	writeTranscript(t, root, "-p", "s2", `{"type":"user","cwd":"/tmp","message":{"role":"user","content":[{"type":"text","text":"block content"}]}}`+"\n")
@@ -155,7 +155,7 @@ func TestCostDeltaIncremental(t *testing.T) {
 // Claude's cwd-mangling, and must prefer the scratchpad the agent writes into.
 func TestScratchDir(t *testing.T) {
 	root := t.TempDir()
-	t.Setenv("AGENTDECK_CLAUDE_SCRATCH", root)
+	t.Setenv("AGENTBOSS_CLAUDE_SCRATCH", root)
 
 	// The real shape: /<root>/<mangled-cwd>/<session-id>/{scratchpad,tasks}
 	withScratch := "11111111-1111-1111-1111-111111111111"
@@ -217,7 +217,7 @@ func TestPricesOverride(t *testing.T) {
 	if err := os.WriteFile(path, []byte(`{"opus": [7, 35], "newmodel": [1, 2]}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("AGENTDECK_PRICING", path)
+	t.Setenv("AGENTBOSS_PRICING", path)
 	priceOnce = sync.Once{}
 	priceTable = nil
 

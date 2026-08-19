@@ -91,7 +91,7 @@ func TestProbeFallsBackToFirstUserMessage(t *testing.T) {
 
 func TestScanAndTranscriptPath(t *testing.T) {
 	root := t.TempDir()
-	t.Setenv("AGENTDECK_CODEX_SESSIONS", root)
+	t.Setenv("AGENTBOSS_CODEX_SESSIONS", root)
 	want := writeRollout(t, root, uuid, `{"type":"session_meta","payload":{"session_id":"`+uuid+`","cwd":"/tmp/work","timestamp":"2026-07-20T16:37:44Z"}}
 {"type":"event_msg","payload":{"type":"user_message","message":"hello there"}}
 `)
@@ -127,7 +127,7 @@ func TestContextTokensDoNotDoubleCountCachedInput(t *testing.T) {
 
 func TestFindLatestMatchesDirAndStartTime(t *testing.T) {
 	root := t.TempDir()
-	t.Setenv("AGENTDECK_CODEX_SESSIONS", root)
+	t.Setenv("AGENTBOSS_CODEX_SESSIONS", root)
 	mk := func(sid, cwd, born string) string {
 		return writeRollout(t, root, sid,
 			`{"type":"session_meta","payload":{"session_id":"`+sid+`","cwd":"`+cwd+`","timestamp":"`+born+`"}}
@@ -182,7 +182,7 @@ func TestTitleTakesFirstRealLineOfAMultilinePrompt(t *testing.T) {
 
 func TestNamesReadsCodexIndexLastWriteWins(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("AGENTDECK_CODEX_HOME", home)
+	t.Setenv("AGENTBOSS_CODEX_HOME", home)
 	// Codex's index is append-only: each rename adds a line.
 	os.WriteFile(filepath.Join(home, "session_index.jsonl"), []byte(
 		`{"id":"t-1","thread_name":"first try","updated_at":"2026-07-26T10:28:42.576620Z"}
@@ -205,7 +205,7 @@ func TestNamesReadsCodexIndexLastWriteWins(t *testing.T) {
 
 func TestSetNameAppendsInCodexFormat(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("AGENTDECK_CODEX_HOME", home)
+	t.Setenv("AGENTBOSS_CODEX_HOME", home)
 	idx := filepath.Join(home, "session_index.jsonl")
 	os.WriteFile(idx, []byte(`{"id":"t-1","thread_name":"old","updated_at":"2026-07-26T10:00:00.000000Z"}`+"\n"), 0o644)
 	if err := SetName("t-1", "new name"); err != nil {
@@ -223,7 +223,7 @@ func TestSetNameAppendsInCodexFormat(t *testing.T) {
 
 func TestTranscriptPathPrefersTheLiveRolloutOfAResumedThread(t *testing.T) {
 	root := t.TempDir()
-	t.Setenv("AGENTDECK_CODEX_SESSIONS", root)
+	t.Setenv("AGENTBOSS_CODEX_SESSIONS", root)
 	const thread = "019f5572-442b-7980-aebe-a4a897c69da6"
 	// The original rollout: file name carries the thread id.
 	old := writeRollout(t, root, thread,

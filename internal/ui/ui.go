@@ -1,5 +1,5 @@
-// Package ui is the agentdeck sidebar: a Bubble Tea app running in the left
-// pane of the agentdeck tmux window. It lists every session with live status,
+// Package ui is the agentboss sidebar: a Bubble Tea app running in the left
+// pane of the agentboss tmux window. It lists every session with live status,
 // drives the viewport pane (a nested tmux client showing the active
 // session), and renders the tab bar into the outer session's status line.
 package ui
@@ -22,14 +22,14 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 
-	"github.com/tallu-wonder/agentdeck/internal/agents"
-	"github.com/tallu-wonder/agentdeck/internal/notify"
-	"github.com/tallu-wonder/agentdeck/internal/paths"
-	"github.com/tallu-wonder/agentdeck/internal/reveal"
-	"github.com/tallu-wonder/agentdeck/internal/sanitize"
-	"github.com/tallu-wonder/agentdeck/internal/state"
-	"github.com/tallu-wonder/agentdeck/internal/status"
-	"github.com/tallu-wonder/agentdeck/internal/tmuxctl"
+	"github.com/tallu-wonder/agentboss/internal/agents"
+	"github.com/tallu-wonder/agentboss/internal/notify"
+	"github.com/tallu-wonder/agentboss/internal/paths"
+	"github.com/tallu-wonder/agentboss/internal/reveal"
+	"github.com/tallu-wonder/agentboss/internal/sanitize"
+	"github.com/tallu-wonder/agentboss/internal/state"
+	"github.com/tallu-wonder/agentboss/internal/status"
+	"github.com/tallu-wonder/agentboss/internal/tmuxctl"
 )
 
 // Status aliases used across the package.
@@ -344,7 +344,7 @@ func (m *Model) reconcileViewport() {
 		return
 	}
 	if derived != "" && derived != m.activeID {
-		// Switched via tab click or `agentdeck _tab`: adopt it.
+		// Switched via tab click or `agentboss _tab`: adopt it.
 		m.activeID = derived
 		m.sawSession(derived)
 	}
@@ -1095,7 +1095,7 @@ func (m *Model) clearActiveAlert() {
 
 // notifyAlerts posts a desktop notification when a session starts asking for
 // you, so you learn about it while looking at another app. Clicking the
-// notification runs `agentdeck focus <id>`, which comes back through drainCmds.
+// notification runs `agentboss focus <id>`, which comes back through drainCmds.
 //
 // Deliberately quiet: nothing fires for the session already on screen (you can
 // see it), nothing fires twice for the same alert, and the alerts that exist
@@ -1236,16 +1236,16 @@ func (m *Model) wake(s *state.Session) error {
 		cmd = fmt.Sprintf(
 			"_t0=$(date +%%s); %s; _rc=$?; "+
 				"if [ $_rc -ne 0 ] && [ $(($(date +%%s)-_t0)) -lt 10 ]; then "+
-				"echo; echo 'agentdeck: resume failed, starting a fresh session'; exec %s; fi",
+				"echo; echo 'agentboss: resume failed, starting a fresh session'; exec %s; fi",
 			resume, bin)
 	}
 	name := state.TmuxName(s.ID)
 	env := map[string]string{
-		"AGENTDECK_ID": s.ID,
+		"AGENTBOSS_ID": s.ID,
 		// Hooks and notify programs inside the session must write where this
-		// manager reads, even when AGENTDECK_HOME is customized.
-		"AGENTDECK_HOME":  paths.Home(),
-		"AGENTDECK_AGENT": p.Kind(),
+		// manager reads, even when AGENTBOSS_HOME is customized.
+		"AGENTBOSS_HOME":  paths.Home(),
+		"AGENTBOSS_AGENT": p.Kind(),
 	}
 	if err := tmuxctl.NewSession(name, s.Dir, env, cmd); err != nil {
 		return err
@@ -1527,7 +1527,7 @@ func (m *Model) dragGroupTo(targetID string) {
 }
 
 // openFolder reveals a session's working folder in the desktop file manager
-// (or AGENTDECK_OPEN_CMD). The folder comes from the desk's own record, so it
+// (or AGENTBOSS_OPEN_CMD). The folder comes from the desk's own record, so it
 // works for dormant sessions too — not just the ones with a live process.
 func (m *Model) openFolder(id string) {
 	s := m.st.Session(id)
@@ -1821,7 +1821,7 @@ func gitInfo(dir string) string {
 		return ""
 	}
 	// A branch name comes from the repository, so it is no more trusted than
-	// anything else agentdeck displays.
+	// anything else agentboss displays.
 	branch := sanitize.Line(string(out))
 	if st, err := exec.Command("git", "-C", dir, "status", "--porcelain").Output(); err == nil &&
 		len(strings.TrimSpace(string(st))) > 0 {
@@ -1842,7 +1842,7 @@ func (m *Model) keyNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "q":
 		// One stray letter must not take the whole desk down — the classic
 		// accident is typing at the sidebar believing an agent has focus.
-		m.confirm("quit agentdeck? sessions keep running", func() tea.Cmd {
+		m.confirm("quit agentboss? sessions keep running", func() tea.Cmd {
 			if m.dirty {
 				m.save()
 			}

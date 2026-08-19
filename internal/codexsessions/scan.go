@@ -17,8 +17,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tallu-wonder/agentdeck/internal/paths"
-	"github.com/tallu-wonder/agentdeck/internal/sanitize"
+	"github.com/tallu-wonder/agentboss/internal/paths"
+	"github.com/tallu-wonder/agentboss/internal/sanitize"
 )
 
 // Conversation is one resumable Codex session found on disk.
@@ -455,7 +455,7 @@ func clean(s string) string {
 	return s
 }
 
-// FindLatest locates the transcript Codex created for a session agentdeck
+// FindLatest locates the transcript Codex created for a session agentboss
 // launched in dir at (or after) notBefore, returning its session ID and path.
 //
 // Codex only reveals a thread ID once a turn completes (via notify), but it

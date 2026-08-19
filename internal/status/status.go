@@ -1,6 +1,6 @@
 // Package status is the tiny runtime channel between Claude Code hooks and
-// the manager UI: one JSON file per session in ~/.agentdeck/status. Hooks
-// write it (from short-lived `agentdeck hook` processes), the manager polls
+// the manager UI: one JSON file per session in ~/.agentboss/status. Hooks
+// write it (from short-lived `agentboss hook` processes), the manager polls
 // it. Kept out of state.json so the two writers never conflict.
 package status
 
@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tallu-wonder/agentdeck/internal/sanitize"
+	"github.com/tallu-wonder/agentboss/internal/sanitize"
 )
 
 // Kind is a session's live status.
@@ -35,7 +35,7 @@ type Runtime struct {
 	UpdatedAt       time.Time `json:"updated_at"`
 }
 
-// idPattern is the shape of the ids agentdeck generates. A session id becomes a
+// idPattern is the shape of the ids agentboss generates. A session id becomes a
 // filename here, so an id carrying "/" or ".." would place the file outside the
 // status directory; reject rather than sanitize, since a malformed id means a
 // caller bug or a tampered state file.
@@ -122,7 +122,7 @@ func Remove(dir, sessionID string) {
 }
 
 // HookEvent is the subset of the JSON Claude Code pipes to hook commands
-// that agentdeck cares about.
+// that agentboss cares about.
 type HookEvent struct {
 	HookEventName string `json:"hook_event_name"`
 	SessionID     string `json:"session_id"`

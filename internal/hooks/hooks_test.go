@@ -10,7 +10,7 @@ import (
 
 func TestInstallFreshFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), ".claude", "settings.json")
-	changed, err := Install(path, "/usr/local/bin/agentdeck")
+	changed, err := Install(path, "/usr/local/bin/agentboss")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -28,11 +28,11 @@ func TestInstallFreshFile(t *testing.T) {
 
 func TestInstallIsIdempotent(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
-	if _, err := Install(path, "/bin/agentdeck"); err != nil {
+	if _, err := Install(path, "/bin/agentboss"); err != nil {
 		t.Fatal(err)
 	}
 	before, _ := os.ReadFile(path)
-	changed, err := Install(path, "/bin/agentdeck")
+	changed, err := Install(path, "/bin/agentboss")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +65,7 @@ func TestInstallPreservesExistingSettings(t *testing.T) {
 	data, _ := json.Marshal(existing)
 	os.WriteFile(path, data, 0o644)
 
-	if _, err := Install(path, "/bin/agentdeck"); err != nil {
+	if _, err := Install(path, "/bin/agentboss"); err != nil {
 		t.Fatal(err)
 	}
 	root := readJSON(t, path)
@@ -78,7 +78,7 @@ func TestInstallPreservesExistingSettings(t *testing.T) {
 	}
 	stops := root["hooks"].(map[string]any)["Stop"].([]any)
 	if len(stops) != 2 {
-		t.Fatalf("expected user hook + agentdeck hook on Stop, got %d entries", len(stops))
+		t.Fatalf("expected user hook + agentboss hook on Stop, got %d entries", len(stops))
 	}
 	// user's entry must still be first and intact
 	first := stops[0].(map[string]any)["hooks"].([]any)[0].(map[string]any)
@@ -89,10 +89,10 @@ func TestInstallPreservesExistingSettings(t *testing.T) {
 
 func TestInstallHealsStaleBinaryPath(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
-	if _, err := Install(path, "/old/place/agentdeck"); err != nil {
+	if _, err := Install(path, "/old/place/agentboss"); err != nil {
 		t.Fatal(err)
 	}
-	changed, err := Install(path, "/new/place/agentdeck")
+	changed, err := Install(path, "/new/place/agentboss")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +103,7 @@ func TestInstallHealsStaleBinaryPath(t *testing.T) {
 	if strings.Contains(string(data), "/old/place/") {
 		t.Fatal("stale path left behind")
 	}
-	if !strings.Contains(string(data), "'/new/place/agentdeck' hook") {
+	if !strings.Contains(string(data), "'/new/place/agentboss' hook") {
 		t.Fatalf("new quoted path missing: %s", data)
 	}
 	// and it must not have duplicated entries
@@ -117,11 +117,11 @@ func TestInstallHealsStaleBinaryPath(t *testing.T) {
 func TestInstallRefusesWrongTypes(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
 	os.WriteFile(path, []byte(`{"hooks": ["not-a-map"]}`), 0o644)
-	if _, err := Install(path, "/bin/agentdeck"); err == nil {
+	if _, err := Install(path, "/bin/agentboss"); err == nil {
 		t.Fatal("must refuse an unexpected hooks structure")
 	}
 	os.WriteFile(path, []byte(`{"hooks": {"Stop": {"bad": true}}}`), 0o644)
-	if _, err := Install(path, "/bin/agentdeck"); err == nil {
+	if _, err := Install(path, "/bin/agentboss"); err == nil {
 		t.Fatal("must refuse an unexpected event entry type")
 	}
 }
@@ -129,7 +129,7 @@ func TestInstallRefusesWrongTypes(t *testing.T) {
 func TestInstallRefusesCorruptFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
 	os.WriteFile(path, []byte("{not json"), 0o644)
-	if _, err := Install(path, "/bin/agentdeck"); err == nil {
+	if _, err := Install(path, "/bin/agentboss"); err == nil {
 		t.Fatal("must refuse to rewrite a corrupt settings file")
 	}
 }
@@ -149,21 +149,21 @@ func readJSON(t *testing.T, path string) map[string]any {
 
 func TestIsOursIsStrict(t *testing.T) {
 	for _, ours := range []string{
-		"'/Users/me/.local/bin/agentdeck' hook",
-		"/usr/local/bin/agentdeck hook",
-		"agentdeck hook",
+		"'/Users/me/.local/bin/agentboss' hook",
+		"/usr/local/bin/agentboss hook",
+		"agentboss hook",
 	} {
 		if !isOurs(ours) {
 			t.Errorf("%q should be recognized as ours", ours)
 		}
 	}
 	for _, foreign := range []string{
-		"notify.sh && agentdeck hook",   // a wrapper we must not clobber
-		"agentdeck hook | tee /tmp/log", // user piped our output somewhere
-		"agentdeck hook --verbose",      // not a command we write
-		"my-agentdeck-wrapper hook-all", // similar name, different tool
+		"notify.sh && agentboss hook",   // a wrapper we must not clobber
+		"agentboss hook | tee /tmp/log", // user piped our output somewhere
+		"agentboss hook --verbose",      // not a command we write
+		"my-agentboss-wrapper hook-all", // similar name, different tool
 		"'/bin/other' hook",             // someone else's hook
-		"echo agentdeck hook",           // mentions us, isn't us
+		"echo agentboss hook",           // mentions us, isn't us
 	} {
 		if isOurs(foreign) {
 			t.Errorf("%q must NOT be treated as ours (it would be overwritten)", foreign)
@@ -178,10 +178,10 @@ func TestInstallBacksUpTheOriginalOnce(t *testing.T) {
 	if err := os.WriteFile(path, []byte(original), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Install(path, "/bin/agentdeck"); err != nil {
+	if _, err := Install(path, "/bin/agentboss"); err != nil {
 		t.Fatal(err)
 	}
-	backup, err := os.ReadFile(path + ".agentdeck-backup")
+	backup, err := os.ReadFile(path + ".agentboss-backup")
 	if err != nil {
 		t.Fatal("no backup written")
 	}
@@ -189,10 +189,10 @@ func TestInstallBacksUpTheOriginalOnce(t *testing.T) {
 		t.Fatalf("backup = %s, want the pre-edit file", backup)
 	}
 	// A later install must not overwrite the pristine copy.
-	if _, err := Install(path, "/bin/agentdeck-moved"); err != nil {
+	if _, err := Install(path, "/bin/agentboss-moved"); err != nil {
 		t.Fatal(err)
 	}
-	again, _ := os.ReadFile(path + ".agentdeck-backup")
+	again, _ := os.ReadFile(path + ".agentboss-backup")
 	if string(again) != original {
 		t.Fatalf("backup was overwritten: %s", again)
 	}

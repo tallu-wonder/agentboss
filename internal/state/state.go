@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tallu-wonder/agentdeck/internal/sanitize"
+	"github.com/tallu-wonder/agentboss/internal/sanitize"
 )
 
 // Group is a named section of the desk ("tools", "reviews", ...).
@@ -69,10 +69,10 @@ type State struct {
 	OldExpanded bool `json:"old_expanded,omitempty"`
 }
 
-// TmuxName is the tmux session name backing a agentdeck session.
+// TmuxName is the tmux session name backing a agentboss session.
 func TmuxName(sessionID string) string { return TmuxPrefix + sessionID }
 
-// TmuxPrefix namespaces agentdeck's tmux sessions, so they are recognizable
+// TmuxPrefix namespaces agentboss's tmux sessions, so they are recognizable
 // among whatever else a user runs under tmux.
 const TmuxPrefix = "adk_"
 
@@ -94,8 +94,8 @@ func NewID(prefix string) string {
 	return prefix + "_" + hex.EncodeToString(b)
 }
 
-// idPattern is the shape of every id agentdeck generates. Ids end up as
-// filenames under ~/.agentdeck and as tmux session names, so anything else is
+// idPattern is the shape of every id agentboss generates. Ids end up as
+// filenames under ~/.agentboss and as tmux session names, so anything else is
 // rejected rather than trusted.
 var idPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
 

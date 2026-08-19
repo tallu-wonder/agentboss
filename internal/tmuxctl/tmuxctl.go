@@ -1,4 +1,4 @@
-// Package tmuxctl wraps the tmux CLI. tmux is agentdeck's process supervisor:
+// Package tmuxctl wraps the tmux CLI. tmux is agentboss's process supervisor:
 // every Claude session lives in its own tmux session, so sessions survive
 // manager restarts, terminal crashes, and closed windows.
 package tmuxctl
@@ -11,7 +11,7 @@ import (
 )
 
 // ManagerSession is the tmux session the manager UI lives in.
-const ManagerSession = "agentdeck"
+const ManagerSession = "agentboss"
 
 // Info describes one live tmux session.
 type Info struct {
@@ -127,9 +127,9 @@ func SwitchClient(name string) error {
 	return err
 }
 
-// BindReturnKey installs a prefix-less global binding: inside agentdeck it
+// BindReturnKey installs a prefix-less global binding: inside agentboss it
 // toggles focus between the sidebar and the session viewport; from any other
-// tmux session it jumps to agentdeck. Idempotent (rebinding overwrites).
+// tmux session it jumps to agentboss. Idempotent (rebinding overwrites).
 func BindReturnKey(key string) error {
 	_, err := run("bind-key", "-n", key,
 		"if", "-F", "#{==:#{session_name},"+ManagerSession+"}",
@@ -145,9 +145,10 @@ func BindReturnKey(key string) error {
 // before the pane sees it, which is the same reason the return key works from
 // inside a session.
 //
-// Keys with a bare bracket or brace are deliberately not the default: alt+[
-// arrives as ESC [, which is also how a control sequence starts, so tmux cannot
-// tell the two apart.
+// alt+[ arrives as ESC [, which is also how every control sequence starts, but
+// terminals emit a sequence as one burst, so arrows, function keys, mouse
+// reports and bracketed paste still parse as themselves. The one ambiguity is
+// Escape followed by a typed bracket within tmux's escape-time.
 func BindCycleKeys(binPath, prevKey, nextKey string) error {
 	for _, b := range []struct{ key, dir string }{{prevKey, "prev"}, {nextKey, "next"}} {
 		if b.key == "" {
@@ -167,17 +168,17 @@ func BindCycleKeys(binPath, prevKey, nextKey string) error {
 // PaneInfo describes one pane of the manager window.
 type PaneInfo struct {
 	ID     string // "%3"
-	Role   string // @agentdeck_role: "sidebar" | "viewport"
+	Role   string // @agentboss_role: "sidebar" | "viewport"
 	TTY    string
 	Dead   bool
 	Active bool // holds the keyboard
 	W, H   int
 }
 
-// Panes lists the panes of the manager window with their agentdeck roles.
+// Panes lists the panes of the manager window with their agentboss roles.
 func Panes() ([]PaneInfo, error) {
 	out, err := exec.Command("tmux", "list-panes", "-t", "="+ManagerSession+":",
-		"-F", "#{pane_id}\t#{@agentdeck_role}\t#{pane_tty}\t#{pane_dead}\t#{pane_active}\t#{pane_width}\t#{pane_height}").Output()
+		"-F", "#{pane_id}\t#{@agentboss_role}\t#{pane_tty}\t#{pane_dead}\t#{pane_active}\t#{pane_width}\t#{pane_height}").Output()
 	if err != nil {
 		return nil, err
 	}
@@ -197,7 +198,7 @@ func Panes() ([]PaneInfo, error) {
 
 // SetPaneRole tags a pane so it can be found again after restarts.
 func SetPaneRole(paneID, role string) error {
-	return SetPaneOption(paneID, "@agentdeck_role", role)
+	return SetPaneOption(paneID, "@agentboss_role", role)
 }
 
 // SetPaneOption sets a pane-scoped option.
@@ -270,14 +271,14 @@ func SwitchClientOn(tty, session string) error {
 	return err
 }
 
-// SetStatusFormat pushes the manager-rendered tab bar into the agentdeck
+// SetStatusFormat pushes the manager-rendered tab bar into the agentboss
 // session's status line.
 func SetStatusFormat(format string) error {
 	_, err := run("set-option", "-t", paneTarget(ManagerSession), "status-format[0]", format)
 	return err
 }
 
-// ConfigureServer applies the server-wide options and key binding agentdeck
+// ConfigureServer applies the server-wide options and key binding agentboss
 // needs so shift+enter inserts a newline in an agent instead of submitting the
 // prompt — through BOTH tmux hops (the outer session and the nested viewport
 // client).
@@ -315,7 +316,7 @@ func ConfigureServer() {
 // Binding the chord sidesteps key negotiation entirely. ESC CR is accepted as
 // "insert a newline" by both Claude Code and Codex (verified by driving each
 // real CLI and watching its composer), and passes through the nested viewport
-// client unchanged. Scoped to the agentdeck session so other tmux sessions
+// client unchanged. Scoped to the agentboss session so other tmux sessions
 // keep tmux's default behavior.
 func bindNewlineKey() {
 	_, _ = run("bind-key", "-n", "S-Enter",
@@ -367,7 +368,7 @@ func ConfigureManagerSession() {
 		{"status-style", "bg=colour235,fg=colour250"},
 		{"mouse", "on"},
 		{"prefix", "C-q"},
-		// Quitting agentdeck must return the user to their shell, not dump
+		// Quitting agentboss must return the user to their shell, not dump
 		// them into a raw agent session.
 		{"detach-on-destroy", "on"},
 	}

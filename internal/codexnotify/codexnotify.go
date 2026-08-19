@@ -1,9 +1,9 @@
-// Package codexnotify installs agentdeck into Codex's `notify` hook without
+// Package codexnotify installs agentboss into Codex's `notify` hook without
 // taking it over: whatever program was there keeps receiving every event.
 //
 // Codex's notify is a single program (unlike Claude Code's hook lists), so
 // the only way to observe events without displacing an existing integration
-// is to chain — agentdeck becomes the notify program, records what it
+// is to chain — agentboss becomes the notify program, records what it
 // replaced, and forwards each invocation verbatim.
 package codexnotify
 
@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tallu-wonder/agentdeck/internal/paths"
+	"github.com/tallu-wonder/agentboss/internal/paths"
 )
 
 // Chain is the displaced notify program, saved so we can forward to it.
@@ -48,7 +48,7 @@ func LoadChain() Chain {
 	return c
 }
 
-// Installed reports whether agentdeck already receives Codex events: either
+// Installed reports whether agentboss already receives Codex events: either
 // notify points at it, or another chaining tool forwards to it (its argv shows
 // up inside that tool's own notify line).
 func Installed(binPath string) bool {
@@ -111,8 +111,8 @@ func Install(binPath string, force bool) (string, error) {
 	// notify key — and an unstartable Codex — happens. Never do that silently.
 	if len(lines) == 1 && !force {
 		return "", fmt.Errorf("the Codex notify slot is already used by another program:\n  %s\n"+
-			"agentdeck reads Codex status from its transcript instead, so nothing is broken.\n"+
-			"To chain agentdeck in front of it anyway: agentdeck install-codex-notify --force",
+			"agentboss reads Codex status from its transcript instead, so nothing is broken.\n"+
+			"To chain agentboss in front of it anyway: agentboss install-codex-notify --force",
 			strings.TrimSpace(lines[0]))
 	}
 
@@ -142,7 +142,7 @@ func Install(binPath string, force bool) (string, error) {
 	}
 
 	if existing != nil {
-		backup := cfgPath + ".agentdeck-backup"
+		backup := cfgPath + ".agentboss-backup"
 		mode := os.FileMode(0o600)
 		if fi, err := os.Stat(cfgPath); err == nil {
 			mode = fi.Mode().Perm()
@@ -203,7 +203,7 @@ func Forward(args []string) {
 	_ = cmd.Run()
 }
 
-// Event is the subset of Codex's notify payload agentdeck reads.
+// Event is the subset of Codex's notify payload agentboss reads.
 type Event struct {
 	Type     string `json:"type"`
 	ThreadID string `json:"thread-id"`
