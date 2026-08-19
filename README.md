@@ -48,6 +48,9 @@ desk with a month of history stays navigable.
 go install github.com/tallu-wonder/agentboss@latest
 ```
 
+— or grab a prebuilt binary from the [latest release](https://github.com/tallu-wonder/agentboss/releases/latest)
+(macOS and Linux, arm64 and amd64) and put it on your `PATH`.
+
 Needs **tmux ≥ 3.2** and at least one of Claude Code / Codex. Run `agentboss`
 from anywhere: outside tmux it wraps itself, inside tmux it jumps to the manager.
 On macOS, `brew install terminal-notifier` makes notifications clickable.
