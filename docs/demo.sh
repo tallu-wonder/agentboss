@@ -61,19 +61,19 @@ lit() { T send-keys -t agentboss:0.0 -l -- "$1"; sleep 0.18; }
 # find selects a session row by (unique part of) its name via search. Escape
 # (not Enter — that would OPEN the match) leaves search with the selection on
 # the matched row and the filter cleared.
-find_row() { keys /; lit "$1"; sleep 0.3; keys Escape; sleep 0.2; }
+find_row() { keys M-/; lit "$1"; sleep 0.3; keys Escape; sleep 0.2; }
 
 for n in "${SESSIONS[@]}"; do
-  keys n C-u; lit "$D/work/$n"; keys Enter Enter; sleep 0.6
+  keys M-n C-u; lit "$D/work/$n"; keys Enter Enter; sleep 0.6
 done
 
-keys N; lit "shipping"; keys Enter
-keys N; lit "reviews";  keys Enter
-find_row "payments"; keys m Down Enter       # → shipping
-find_row "flaky";    keys m Down Enter       # → shipping
-find_row "release";  keys m Down Down Enter  # → reviews
-find_row "PR";       keys m Down Down Enter  # → reviews
-find_row "dep";      keys x y                # → old shelf
+keys M-N; lit "shipping"; keys Enter
+keys M-N; lit "reviews";  keys Enter
+find_row "payments"; keys M-m Down Enter       # → shipping
+find_row "flaky";    keys M-m Down Enter       # → shipping
+find_row "release";  keys M-m Down Down Enter  # → reviews
+find_row "PR";       keys M-m Down Down Enter  # → reviews
+find_row "dep";      keys M-x y                # → old shelf
 sleep 0.5
 
 # name → desk id, then conversation ids + fabricated transcripts (model,
@@ -131,8 +131,8 @@ shot() {
   T capture-pane -p -e -J -t holder > "$D/$1.ansi"
   python3 docs/ansi2svg.py "$D/$1.ansi" "docs/$1.svg" agentboss
 }
-keys '?'; sleep 0.6; shot keys; keys Escape; sleep 0.3
-find_row "payments"; keys v; sleep 0.7; shot info; keys Escape; sleep 0.3
+keys 'M-?'; sleep 0.6; shot keys; keys Escape; sleep 0.3
+find_row "payments"; keys M-v; sleep 0.7; shot info; keys Escape; sleep 0.3
 
 # The hero is shorter. Resize first, then reopen the featured session so its
 # agent paints at the final size (a repaint after shrinking would otherwise
@@ -140,7 +140,7 @@ find_row "payments"; keys v; sleep 0.7; shot info; keys Escape; sleep 0.3
 T kill-session -t holder
 T resize-window -t agentboss: -x 99 -y 24
 sleep 1
-find_row "payments"; keys z y; sleep 1     # close its tab...
+find_row "payments"; keys M-z y; sleep 1     # close its tab...
 find_row "payments"; keys Enter; sleep 2   # ...and reopen at the final size
 hookev "$(id_of 'payments refactor')" '{"hook_event_name":"PreToolUse","tool_name":"Edit"}'
 T select-pane -t "$SB"

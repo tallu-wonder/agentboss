@@ -25,6 +25,15 @@ func optName() string {
 	return "alt"
 }
 
+// modKey renders a chord for the key legend: compact ⌥ on macOS, spelled out
+// elsewhere.
+func modKey(k string) string {
+	if runtime.GOOS == "darwin" {
+		return "⌥" + k
+	}
+	return "alt+" + k
+}
+
 // groupPalette maps a group's color slot to matching terminal colors for
 // the sidebar (lipgloss) and the tab bar (tmux formats).
 var groupPalette = []struct {
@@ -315,17 +324,19 @@ func (m *Model) matchCount() (shown, total int) {
 // something you should know about before pressing it.
 func (m *Model) footerHints() []string {
 	r := m.selectedRow()
+	help := modKey("?") + " keys"
 	switch {
 	case r != nil && r.kind == rowGroup && r.id == oldSection:
-		return []string{"spc open the shelf", "? keys"}
+		return []string{"↵ open the shelf", help}
 	case r != nil && r.kind == rowGroup:
-		return []string{"spc collapse", "r rename", "c color", "n new here", "? keys"}
+		return []string{"↵ collapse", modKey("r") + " rename", modKey("c") + " color", help}
 	case r != nil:
 		if s := m.st.Session(r.id); s != nil && s.Archived {
-			return []string{"↵ revive", "x delete", "m regroup", "? keys"}
+			return []string{"↵ revive", modKey("x") + " delete", modKey("m") + " regroup", help}
 		}
 	}
-	return []string{"↵ open", "n new", "i import", "/ find", "s sort", "? keys"}
+	return []string{"↵ open", modKey("n") + " new", modKey("i") + " import",
+		modKey("/") + " find", modKey("s") + " sort", help}
 }
 
 // fitHints joins hint segments with separators, dropping middle segments that
@@ -913,37 +924,43 @@ func (m *Model) viewInfo() string {
 func (m *Model) viewHelp() string {
 	iw := m.width
 	ih := m.listInnerHeight()
-	keyW := 13
-	opt := optName()
+	k := modKey
 	rows := [][2]string{
 		{"enter", "open (wakes dormant)"},
-		{"o", "open, keep focus here"},
+		{k("o"), "open, keep focus here"},
 		{"ctrl+\\", "sidebar ⇄ session"},
 		{"tab", "focus the session"},
-		{"[ ]", "prev / next session"},
-		{opt + "+[ " + opt + "+]", "same, from inside an agent"},
-		{"1-9", "n-th open session"},
-		{"a", "next needing attention"},
-		{"/", "search"},
-		{"n", "new session"},
-		{"W", "new session in a git worktree"},
-		{"i", "import past conversation"},
-		{"N r m", "group / rename / regroup"},
+		{k("[") + " " + k("]"), "prev / next — works anywhere"},
+		{k("1") + "-" + k("9"), "n-th open session — anywhere"},
+		{k("a"), "next needing you — anywhere"},
+		{k("/"), "search"},
+		{k("n"), "new session"},
+		{k("W"), "new session in a git worktree"},
+		{k("i"), "import past conversation"},
+		{k("N") + " " + k("r") + " " + k("m"), "group / rename / regroup"},
 		{"", "(also renames in the agent)"},
-		{"J K, drag", "reorder rows & groups"},
-		{"s", "sort: status/recent/name/dir"},
-		{"v", "session info popup"},
-		{"f F", "its folder · scratchpad"},
-		{"M", "mute / unmute alerts"},
+		{k("J") + " " + k("K"), "reorder (or drag)"},
+		{k("s"), "sort: status/recent/name/dir"},
+		{k("v"), "session info popup"},
+		{k("f") + " " + k("F"), "its folder · scratchpad"},
+		{k("M"), "mute / unmute alerts"},
 		{"right-click", "context menu (rows & tabs)"},
-		{"c", "cycle group color"},
-		{"spc h", "collapse group (tab folds too)"},
-		{"< >", "sidebar width"},
-		{"z, mid-click", "close tab, stays on desk"},
-		{"x", "close to old · in old: delete"},
-		{"u", "reopen what you just closed"},
-		{"q", "quit, sessions live on"},
+		{k("c"), "cycle group color"},
+		{k("spc"), "collapse group (tab folds too)"},
+		{k("<") + " " + k(">"), "sidebar width"},
+		{k("z"), "close tab, stays on desk"},
+		{k("x"), "close to old · in old: delete"},
+		{k("u"), "reopen what you just closed"},
+		{k("q"), "quit, sessions live on"},
 	}
+	// The key column is exactly as wide as its widest label.
+	keyW := 0
+	for _, r := range rows {
+		if w := ansi.StringWidth(r[0]); w > keyW {
+			keyW = w
+		}
+	}
+	keyW += 2
 	lines := []string{" " + stHeader.Render("keys"), ""}
 	for _, r := range rows {
 		// A narrow sidebar wraps the description instead of chopping it — the
@@ -959,8 +976,8 @@ func (m *Model) viewHelp() string {
 		" "+stWorking.Render("⠙ working ")+stAlert.Render("◆ needs you"),
 		" "+stNew.Render("● new ")+stIdle.Render("· idle ")+stDormant.Render("○ dormant"),
 		"",
-		" "+stDim.Render("tmux prefix here: ctrl+q"),
-		" "+stDim.Render("any key closes"))
+		" "+stDim.Render("bare letters never act — stray typing is safe"),
+		" "+stDim.Render("tmux prefix here: ctrl+q · any key closes"))
 	for len(lines) < ih {
 		lines = append(lines, "")
 	}

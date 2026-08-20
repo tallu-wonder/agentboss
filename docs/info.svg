@@ -168,7 +168,7 @@
 <text x="398.0" y="498.9" fill="#42b3c2" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="406.4" y="498.9" fill="#c8ccd6" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="20.0" y="516.9" fill="#42b3c2" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="36.8" y="516.9" fill="#6c6c6c" textLength="294.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">process  live · tmux adk_s_67b51abc</text>
+<text x="36.8" y="516.9" fill="#6c6c6c" textLength="294.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">process  live · tmux adk_s_0dce12d8</text>
 <text x="398.0" y="516.9" fill="#42b3c2" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="406.4" y="516.9" fill="#c8ccd6" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="20.0" y="534.9" fill="#42b3c2" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
@@ -187,6 +187,6 @@
 <text x="20.0" y="660.9" fill="#c8ccd6" textLength="394.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">                                              │</text>
 <text x="20.0" y="678.9" fill="#c8ccd6" textLength="394.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">                                              │</text>
 <text x="20.0" y="696.9" fill="#c8ccd6" textLength="394.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">                                              │</text>
-<text x="28.4" y="714.9" fill="#6c6c6c" textLength="361.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve">↵ open · n new · i import · / find · ? keys</text>
-<text x="389.6" y="714.9" fill="#c8ccd6" textLength="25.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  │</text>
+<text x="28.4" y="714.9" fill="#6c6c6c" textLength="310.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">↵ open · ⌥n new · ⌥i import · ⌥? keys</text>
+<text x="339.2" y="714.9" fill="#c8ccd6" textLength="75.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">        │</text>
 </svg>

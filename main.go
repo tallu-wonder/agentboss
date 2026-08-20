@@ -338,6 +338,7 @@ func runUI() error {
 	_ = tmuxctl.BindReturnKey(returnKey())
 	prevKey, nextKey := cycleKeys()
 	_ = tmuxctl.BindCycleKeys(shellQuote(self), prevKey, nextKey)
+	_ = tmuxctl.BindSessionKeys(shellQuote(self))
 	_ = tmuxctl.BindStatusClicks(shellQuote(self))
 	tmuxctl.ConfigureServer()
 	tmuxctl.ConfigureManagerSession()
@@ -691,8 +692,8 @@ func runTab(arg string) {
 	if dir, ok := strings.CutPrefix(arg, "tabs:"); ok {
 		arg = dir
 	}
-	if arg != "manager" && arg != "next" && arg != "prev" {
-		// Remember the grabbed tab in case this click turns into a drag.
+	if state.ValidID(arg) {
+		// A click on a session's tab: remember it in case it becomes a drag.
 		rec, _ := json.Marshal(dragRec{From: arg, At: time.Now().UnixMilli()})
 		_ = os.WriteFile(dragFile(), rec, 0o600)
 	}
@@ -723,38 +724,42 @@ func runTab(arg string) {
 		return
 	}
 	live := tmuxctl.ListSessions()
+
+	// The open sessions in SIDEBAR order (ungrouped first, then groups in
+	// group order, collapsed groups' members skipped) — the order the tabs
+	// show and the number badges count.
+	collapsed := map[string]bool{}
+	for _, g := range st.Groups {
+		if g.Collapsed {
+			collapsed[g.ID] = true
+		}
+	}
+	var liveIDs []string
+	cur := -1
+	active := state.SessionIDFromTmux(tmuxctl.ClientSessions()[vpTTY])
+	addMembers := func(gid string) {
+		for i := range st.Sessions {
+			s := &st.Sessions[i]
+			if s.GroupID != gid || s.Archived || collapsed[gid] {
+				continue
+			}
+			if _, ok := live[state.TmuxName(s.ID)]; !ok {
+				continue
+			}
+			if s.ID == active {
+				cur = len(liveIDs)
+			}
+			liveIDs = append(liveIDs, s.ID)
+		}
+	}
+	addMembers("")
+	for _, g := range st.Groups {
+		addMembers(g.ID)
+	}
+
 	target := ""
-	switch arg {
-	case "next", "prev":
-		collapsed := map[string]bool{}
-		for _, g := range st.Groups {
-			if g.Collapsed {
-				collapsed[g.ID] = true
-			}
-		}
-		var liveIDs []string
-		cur := -1
-		active := state.SessionIDFromTmux(tmuxctl.ClientSessions()[vpTTY])
-		// sidebar order: ungrouped first, then groups in group order
-		addMembers := func(gid string) {
-			for i := range st.Sessions {
-				s := &st.Sessions[i]
-				if s.GroupID != gid || s.Archived || collapsed[gid] {
-					continue
-				}
-				if _, ok := live[state.TmuxName(s.ID)]; !ok {
-					continue
-				}
-				if s.ID == active {
-					cur = len(liveIDs)
-				}
-				liveIDs = append(liveIDs, s.ID)
-			}
-		}
-		addMembers("")
-		for _, g := range st.Groups {
-			addMembers(g.ID)
-		}
+	switch {
+	case arg == "next" || arg == "prev":
 		if len(liveIDs) == 0 {
 			return
 		}
@@ -763,6 +768,24 @@ func runTab(arg string) {
 			d = -1
 		}
 		target = liveIDs[((cur+d)%len(liveIDs)+len(liveIDs))%len(liveIDs)]
+	case len(arg) == 2 && arg[0] == 'n' && arg[1] >= '1' && arg[1] <= '9':
+		if idx := int(arg[1] - '1'); idx < len(liveIDs) {
+			target = liveIDs[idx]
+		}
+	case arg == "attn":
+		// The next open session needing attention, walking the tab order from
+		// the active one.
+		dir := paths.StatusDir()
+		for off := 1; off <= len(liveIDs); off++ {
+			id := liveIDs[(cur+off+len(liveIDs))%len(liveIDs)]
+			switch status.Read(dir, id).Status {
+			case status.NeedsYou, status.Attention:
+				target = id
+			}
+			if target != "" {
+				break
+			}
+		}
 	default:
 		if s := st.Session(arg); s != nil {
 			target = s.ID

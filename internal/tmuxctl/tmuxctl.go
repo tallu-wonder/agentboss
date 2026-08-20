@@ -154,15 +154,35 @@ func BindCycleKeys(binPath, prevKey, nextKey string) error {
 		if b.key == "" {
 			continue
 		}
-		_, err := run("bind-key", "-n", b.key,
-			"if", "-F", "#{==:#{session_name},"+ManagerSession+"}",
-			"run-shell \""+binPath+" _tab "+b.dir+"\"",
-			"send-keys "+b.key)
-		if err != nil {
+		if err := bindDeskKey(binPath, b.key, b.dir); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// BindSessionKeys makes opt+1..opt+9 show the n-th open session and opt+a the
+// next one needing attention — from anywhere on the desk, agent panes
+// included, exactly like the cycle keys. The keyboard stays where it is: the
+// viewport changes, focus doesn't.
+func BindSessionKeys(binPath string) error {
+	for n := 1; n <= 9; n++ {
+		if err := bindDeskKey(binPath, fmt.Sprintf("M-%d", n), fmt.Sprintf("n%d", n)); err != nil {
+			return err
+		}
+	}
+	return bindDeskKey(binPath, "M-a", "attn")
+}
+
+// bindDeskKey installs a root-table binding scoped to the desk: inside the
+// manager session it runs `binPath _tab arg`; any other tmux session gets the
+// keystroke untouched.
+func bindDeskKey(binPath, key, arg string) error {
+	_, err := run("bind-key", "-n", key,
+		"if", "-F", "#{==:#{session_name},"+ManagerSession+"}",
+		"run-shell \""+binPath+" _tab "+arg+"\"",
+		"send-keys "+key)
+	return err
 }
 
 // PaneInfo describes one pane of the manager window.

@@ -57,7 +57,7 @@ On macOS, `brew install terminal-notifier` makes notifications clickable.
 
 ## A tour
 
-Press `n`, pick a folder, pick an agent — that's a session. It gets a tab, a row,
+Press `opt+n`, pick a folder, pick an agent — that's a session. It gets a tab, a row,
 and a status glyph that tracks it: `⠴ working`, `◆ needs you`, `● finished since
 you looked`, `· idle`, `○ dormant`. Group it, drag it, rename it. Walk away and
 the agents keep going.
@@ -68,8 +68,8 @@ the agents keep going.
 <td width="50%"><img src="docs/keys.svg" alt="the keys overlay, listing every binding" width="100%"></td>
 </tr>
 <tr>
-<td align="center"><code>v</code> — everything about one session</td>
-<td align="center"><code>?</code> — every key, without leaving the desk</td>
+<td align="center"><code>opt+v</code> — everything about one session</td>
+<td align="center"><code>opt+?</code> — every key, without leaving the desk</td>
 </tr>
 </table>
 
@@ -87,7 +87,7 @@ reducing them to a lowest common denominator.
 | Context size | last turn's tokens vs a per-model estimate | last turn's prompt vs the **real** window Codex reports |
 | After a compaction | drops immediately, from the compact record | drops on the next turn |
 | Estimated cost | yes, per-model | not shown — no trustworthy price table |
-| Per-session scratch folder | yes — `F` opens it | none; Codex writes only its transcript |
+| Per-session scratch folder | yes — `opt+F` opens it | none; Codex writes only its transcript |
 
 Mixed desks are the point: group a Claude session next to a Codex one, sort them
 together, switch with the same keys.
@@ -96,7 +96,7 @@ together, switch with the same keys.
 
 Two ways to parallelize that don't step on each other:
 
-- **`W` — a session in a fresh git worktree.** You name it; the worktree lands
+- **`opt+W` — a session in a fresh git worktree.** You name it; the worktree lands
   at `<repo-parent>/.worktrees/<repo>-<name>` on a new branch `<name>`
   (an existing branch of that name is checked out instead). Each agent gets its
   own working copy, so nothing they edit collides. agentboss never deletes a
@@ -108,35 +108,45 @@ Two ways to parallelize that don't step on each other:
 
 ## Keys
 
+**Every action key is an `opt`/`alt` chord, and a bare letter does nothing —
+by design.** Sooner or later you will type prose at the sidebar believing an
+agent has the keyboard, and "1. first do this" must not be able to switch
+sessions, close tabs, or start anything. Only keys that can't appear in prose
+stay plain: `enter`, `tab`, `esc`, arrows, paging, and the mouse.
+
+Three chords work **from anywhere on the desk, inside an agent included** —
+tmux intercepts them before the agent sees them, and your keyboard stays where
+it is: `opt+[` / `opt+]` (previous / next), `opt+1`…`opt+9` (n-th open
+session, tab order), `opt+a` (next session needing you).
+
 | Key | Action |
 | --- | --- |
-| `enter` / `l` / click | open in the viewport (wakes dormant sessions; asks first for `old` ones) |
-| `o` | open but keep focus in the sidebar |
+| `enter` / click | open in the viewport (wakes dormant sessions; asks first for `old` ones) |
+| `opt+o` | open but keep focus in the sidebar |
 | `ctrl+\` | sidebar ⇄ session; from another tmux session, jump to the desk |
-| `[` `]`, tab clicks | previous / next session |
-| `alt+[` `alt+]` | the same two keys, **from inside an agent** — tmux intercepts them before the agent sees them, so you never leave the pane you are typing in |
-| `1`–`9` | the n-th **open** session — same order as the tabs |
-| `a` | jump to the next session needing attention |
-| `/` | search (substring on name/folder/group, fuzzy on name) |
-| `n` · `i` | new session · import a past conversation (both agents) |
-| `W` | new session in a fresh **git worktree** of a repo |
-| `N` · `r` · `m` | new group · rename · move to group |
-| `J` `K`, drag | reorder rows and groups, across groups or onto a header |
-| `s` · `c` | sort · pick a group's color |
-| `v` · `?` | session info · keys |
-| `M` | mute / unmute desktop notifications |
-| `f` · `F` | open the session's folder · the agent's own scratch folder |
-| right-click | context menu, on a row or a tab, with the same keys as the sidebar |
-| `space` / `h` | collapse or expand a group |
-| `<` `>`, drag divider | sidebar width |
-| `z` · `x` | close the tab (session stays, asks first) · close to `old`; on an old session, delete |
-| `u` | reopen what you just closed or shelved |
-| `q` | quit the manager (asks first) — every agent keeps running |
+| `opt+[` `opt+]`, tab clicks | previous / next session — anywhere |
+| `opt+1`–`opt+9` | the n-th **open** session — anywhere, same order as the tabs |
+| `opt+a` | next session needing attention — anywhere |
+| `opt+/` | search (substring on name/folder/group, fuzzy on name) |
+| `opt+n` · `opt+i` | new session · import a past conversation (both agents) |
+| `opt+W` | new session in a fresh **git worktree** of a repo |
+| `opt+N` · `opt+r` · `opt+m` | new group · rename · move to group |
+| `opt+J` `opt+K`, drag | reorder rows and groups, across groups or onto a header |
+| `opt+s` · `opt+c` | sort · pick a group's color |
+| `opt+v` · `opt+?` | session info · keys |
+| `opt+M` | mute / unmute desktop notifications |
+| `opt+f` · `opt+F` | open the session's folder · the agent's own scratch folder |
+| right-click | context menu, on a row or a tab, with single-letter shortcuts (it's modal — prose can't reach it) |
+| `opt+space` / `opt+h` | collapse or expand a group (`enter` on the header too) |
+| `opt+<` `opt+>`, drag divider | sidebar width |
+| `opt+z` · `opt+x` | close the tab (session stays, asks first) · close to `old`; on an old session, delete |
+| `opt+u` | reopen what you just closed or shelved |
+| `opt+q` | quit the manager (asks first) — every agent keeps running |
 
 On macOS, Option only sends Alt if the terminal says so — Ghostty needs
-`macos-option-as-alt = true`, iTerm2 "Esc+" for the left Option key. Terminals
-that can't, or that use `alt+[` themselves, can move the keys with
-`AGENTBOSS_PREV_KEY` / `AGENTBOSS_NEXT_KEY`.
+`macos-option-as-alt = true`, iTerm2 "Esc+" for the left Option key. On Linux,
+read `opt` as `alt`. Terminals that use some of these chords themselves can
+move the cycle keys with `AGENTBOSS_PREV_KEY` / `AGENTBOSS_NEXT_KEY`.
 
 Mouse: click a row to open it, drag rows and headers to reorder and regroup,
 click tabs to switch, drag tabs to reorder, middle-click to close, right-click

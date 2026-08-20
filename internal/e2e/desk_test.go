@@ -209,7 +209,7 @@ func (d *desk) newSession(name string) string {
 		d.t.Fatal(err)
 	}
 	before := len(d.state().Sessions)
-	d.keys("n")
+	d.keys("M-n")
 	d.keys("C-u")
 	d.literal(dir)
 	d.keys("Enter") // folder
@@ -289,7 +289,7 @@ func TestDigitKeysFollowTheTabs(t *testing.T) {
 	// Close the first session's tab: it stays on the desk but stops being open.
 	d.waitFor("both to be open", func() bool { return len(d.liveSessions()) == 2 })
 	d.keys("Home")
-	d.keys("z", "y") // close the tab of the selected (first) session; z asks first
+	d.keys("M-z", "y") // close the tab of the selected (first) session; z asks first
 	d.waitFor("the first tab to close", func() bool {
 		for _, s := range d.liveSessions() {
 			if s == first {
@@ -303,7 +303,7 @@ func TestDigitKeysFollowTheTabs(t *testing.T) {
 	if got := d.sidebar(); !strings.Contains(got, "1 ") {
 		t.Errorf("expected a badge for the one open session:\n%s", got)
 	}
-	d.keys("1")
+	d.keys("M-1")
 	d.waitFor("the viewport to hold the open session", func() bool {
 		out, _ := d.tmux("list-clients", "-F", "#{client_session}")
 		return strings.Contains(out, "adk_"+second)
@@ -319,7 +319,7 @@ func TestShelvedSessionAsksBeforeWaking(t *testing.T) {
 	d.waitFor("it to be open", func() bool { return len(d.liveSessions()) == 1 })
 
 	d.keys("Home")
-	d.keys("x") // close → old
+	d.keys("M-x") // close → old
 	d.waitFor("the confirmation to appear", func() bool {
 		return strings.Contains(d.sidebar(), "old?")
 	})
@@ -341,14 +341,14 @@ func TestShelvedSessionAsksBeforeWaking(t *testing.T) {
 	// The `old` section starts collapsed, so open it before the session can be
 	// selected at all.
 	d.keys("End")
-	d.keys("space")
+	d.keys("M-Space")
 	d.waitFor("the shelf to open", func() bool { return strings.Contains(d.sidebar(), "shelved") })
 
 	// Opening it asks rather than waking it.
 	d.keys("End")
 	d.keys("Enter")
 	d.waitFor("the revive prompt", func() bool { return strings.Contains(d.sidebar(), "revive") })
-	d.keys("n")
+	d.keys("M-n")
 	time.Sleep(700 * time.Millisecond)
 	if len(d.liveSessions()) != 0 {
 		t.Errorf("answering no started an agent anyway: %v", d.liveSessions())
@@ -373,12 +373,12 @@ func TestConfirmationIsAPopup(t *testing.T) {
 	d.newSession("doomed")
 	d.keys("C-\\")
 	d.keys("Home")
-	d.keys("x")
+	d.keys("M-x")
 	d.waitFor("the confirmation box", func() bool {
 		s := d.sidebar()
 		return strings.Contains(s, "╭") && strings.Contains(s, "old?") && strings.Contains(s, "y confirm")
 	})
-	d.keys("n")
+	d.keys("M-n")
 }
 
 // An alert on a session you are not looking at notifies; muting silences it.
@@ -396,7 +396,7 @@ func TestNotifiesAndMutes(t *testing.T) {
 	d.waitFor("a notification", func() bool { return d.notifications() > before })
 
 	// Muted, the same alert says nothing.
-	d.keys("M")
+	d.keys("M-M")
 	d.waitFor("the mute notice", func() bool { return strings.Contains(d.sidebar(), "muted") })
 	d.hook(watched, `{"hook_event_name":"SessionStart"}`)
 	time.Sleep(600 * time.Millisecond)
@@ -421,7 +421,7 @@ func TestHostileNameIsRenderedInert(t *testing.T) {
 	// Rename it to something that would clear the screen and run a command if
 	// either the sidebar or the tab bar took it literally.
 	d.keys("Home")
-	d.keys("r")
+	d.keys("M-r")
 	d.keys("C-u")
 	d.literal("\x1b[2Jzap #(touch " + filepath.Join(d.dir, "pwned") + ")")
 	d.keys("Enter")
@@ -459,7 +459,7 @@ func TestOpenFolder(t *testing.T) {
 	d.newSession("withfolder")
 	d.keys("C-\\")
 	d.keys("Home")
-	d.keys("f")
+	d.keys("M-f")
 	d.waitFor("the opener to run", func() bool {
 		data, err := os.ReadFile(d.openLog)
 		return err == nil && strings.Contains(string(data), "withfolder")
@@ -473,7 +473,7 @@ func TestQuitLeavesSessionsRunning(t *testing.T) {
 	d.keys("C-\\")
 	d.waitFor("it to be open", func() bool { return len(d.liveSessions()) == 1 })
 
-	d.keys("q", "y") // quit asks first
+	d.keys("M-q", "y") // quit asks first
 	d.waitFor("the manager session to go", func() bool {
 		out, _ := d.tmux("has-session", "-t", "=agentboss:")
 		return strings.Contains(out, "can't find") || strings.Contains(out, "no server")
@@ -491,7 +491,7 @@ func TestDeskSurvivesAManagerRestart(t *testing.T) {
 	d.keys("C-\\")
 	d.waitFor("it to be open", func() bool { return len(d.liveSessions()) == 1 })
 
-	d.keys("q", "y") // quit asks first
+	d.keys("M-q", "y") // quit asks first
 	d.waitFor("the manager to exit", func() bool {
 		out, _ := d.tmux("has-session", "-t", "=agentboss:")
 		return strings.Contains(out, "can't find") || strings.Contains(out, "no server")
@@ -543,7 +543,7 @@ func TestTabOrderFollowsTheSidebar(t *testing.T) {
 	}
 	// Move the second session up; the tabs must follow.
 	d.keys("End")
-	d.keys("K")
+	d.keys("M-K")
 	d.waitFor("the reorder to show up in the tabs", func() bool {
 		tabs := d.tabs()
 		return strings.Index(tabs, "bbb") < strings.Index(tabs, "aaa")
@@ -633,6 +633,19 @@ func TestCycleKeysWorkFromInsideAnAgent(t *testing.T) {
 		t.Errorf("focus moved out of the agent pane: role=%q", strings.TrimSpace(role))
 	}
 
+	// The digit keys work the same way: alt+1 (ESC 1) shows the first open
+	// session from inside an agent, keyboard staying where it is.
+	press("1b", "31") // alt+1
+	first := d.state().Sessions[0].ID
+	if now := shown(); now != first {
+		t.Errorf("alt+1 showed %s, want the first open session %s", now, first)
+	}
+	press("1b", "32") // alt+2
+	if now := shown(); now == first {
+		t.Errorf("alt+2 did not move off the first session")
+	}
+	before = shown() // the escape-sequence probes below assert no movement
+
 	// Binding the CSI prefix must not swallow the sequences that share it. Mouse
 	// reporting is covered by the click and drag tests, which all run with these
 	// bindings in place; here it is the keys that cannot reach the sidebar.
@@ -667,7 +680,7 @@ func TestWorktreeSession(t *testing.T) {
 		}
 	}
 
-	d.keys("W", "C-u")
+	d.keys("M-W", "C-u")
 	d.literal(repo)
 	d.keys("Enter") // repo accepted → worktree name prompt
 	d.literal("try-1")

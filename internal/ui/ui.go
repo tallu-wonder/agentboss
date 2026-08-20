@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -1895,6 +1896,10 @@ func gitInfo(dir string) string {
 	return branch
 }
 
+// keyNormal handles the sidebar's key map. Every ACTION key is an opt/alt
+// chord: prose typed here by mistake (the classic wrong-focus accident) must
+// not be able to trigger anything. Only keys that cannot appear in prose stay
+// plain — enter, tab, esc, arrows, paging.
 func (m *Model) keyNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
 	switch key {
@@ -1904,9 +1909,7 @@ func (m *Model) keyNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, tea.Quit
 
-	case "q":
-		// One stray letter must not take the whole desk down — the classic
-		// accident is typing at the sidebar believing an agent has focus.
+	case "alt+q":
 		m.confirm("quit agentboss? sessions keep running", func() tea.Cmd {
 			if m.dirty {
 				m.save()
@@ -1914,14 +1917,14 @@ func (m *Model) keyNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return tea.Quit
 		})
 
-	case "up", "k":
+	case "up", "alt+k":
 		m.moveSel(-1)
-	case "down", "j":
+	case "down", "alt+j":
 		m.moveSel(1)
-	case "g", "home":
+	case "home", "alt+g":
 		m.sel = 0
 		m.ensureVisible()
-	case "G", "end":
+	case "end", "alt+G":
 		m.sel = len(m.rows) - 1
 		m.clampSel()
 		m.ensureVisible()
@@ -1930,14 +1933,17 @@ func (m *Model) keyNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "pgdown":
 		m.moveSel(m.listInnerHeight())
 
-	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
-		if idx := m.nthSession(int(key[0] - '0')); idx >= 0 {
+	// The digits and alt+a are normally intercepted by tmux root bindings
+	// (which is what makes them work INSIDE an agent); these handlers cover
+	// keystrokes injected straight into the pane, tests included.
+	case "alt+1", "alt+2", "alt+3", "alt+4", "alt+5", "alt+6", "alt+7", "alt+8", "alt+9":
+		if idx := m.nthSession(int(key[len(key)-1] - '0')); idx >= 0 {
 			m.sel = idx
 			m.ensureVisible()
-			m.open(m.rows[idx].id, true)
+			m.open(m.rows[idx].id, false)
 		}
 
-	case "enter", "l":
+	case "enter":
 		r := m.selectedRow()
 		if r == nil {
 			return m, nil
@@ -1948,7 +1954,7 @@ func (m *Model) keyNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.open(r.id, true)
 		}
 
-	case "o":
+	case "alt+o":
 		// peek: open in viewport but keep focus in the sidebar
 		if id := m.selectedSessionID(); id != "" {
 			m.open(id, false)
@@ -1959,16 +1965,9 @@ func (m *Model) keyNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			_ = tmuxctl.SelectPane(m.vpPane)
 		}
 
-	case "[", "]":
-		d := 1
-		if key == "[" {
-			d = -1
-		}
-		m.cycleTab(d)
-
-	case "<", ">":
+	case "alt+<", "alt+>":
 		w := m.sidebarWidth(m.lastTotalW)
-		if key == "<" {
+		if strings.HasSuffix(key, "<") {
 			w -= 2
 		} else {
 			w += 2
@@ -1980,7 +1979,7 @@ func (m *Model) keyNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.dirty = true
 		_ = tmuxctl.ResizePane(m.sidebarPane, w)
 
-	case "a":
+	case "alt+a":
 		idx := m.nextAlert()
 		if idx < 0 && m.filter != "" {
 			// The alerting session may be hidden by the filter: clear it.
@@ -1997,7 +1996,7 @@ func (m *Model) keyNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.flash("nothing needs attention", false)
 		}
 
-	case "h":
+	case "alt+h":
 		r := m.selectedRow()
 		if r == nil {
 			return m, nil
@@ -2020,15 +2019,15 @@ func (m *Model) keyNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-	case "s", "S":
+	case "alt+s", "alt+S":
 		m.openSortPick()
 
-	case "v":
+	case "alt+v":
 		if id := m.selectedSessionID(); id != "" {
 			m.openInfo(id)
 		}
 
-	case "M":
+	case "alt+M":
 		m.st.NotifyMuted = !m.st.NotifyMuted
 		m.save()
 		if m.st.NotifyMuted {
@@ -2037,27 +2036,27 @@ func (m *Model) keyNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.flash("notifications on", false)
 		}
 
-	case "f":
+	case "alt+f":
 		if id := m.selectedSessionID(); id != "" {
 			m.openFolder(id)
 		}
 
-	case "F":
+	case "alt+F":
 		if id := m.selectedSessionID(); id != "" {
 			m.openScratch(id)
 		}
 
-	case "c":
+	case "alt+c":
 		if r := m.selectedRow(); r != nil && r.kind == rowGroup && r.id != oldSection {
 			m.openColorPick(r.id)
 		}
 
-	case " ":
+	case "alt+ ", "alt+space":
 		if r := m.selectedRow(); r != nil && r.kind == rowGroup {
 			m.toggleGroup(r.id)
 		}
 
-	case "/":
+	case "alt+/":
 		m.mode = modeSearch
 		m.search.SetValue("")
 		m.filter = ""
@@ -2070,23 +2069,23 @@ func (m *Model) keyNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.buildRows()
 		}
 
-	case "n":
+	case "alt+n":
 		m.pickFor = ""
 		m.wtFlow = false
 		m.startInput(modeInputDir, "directory (tab completes)", m.defaultDir())
 
-	case "W":
+	case "alt+W":
 		// New session in a fresh git worktree: several agents on one repo
 		// without stepping on each other's files.
 		m.pickFor = ""
 		m.wtFlow = true
 		m.startInput(modeInputDir, "repo (tab completes)", m.defaultDir())
 
-	case "N":
+	case "alt+N":
 		m.pickFor = ""
 		m.startInput(modeInputGroup, "new group name", "")
 
-	case "i":
+	case "alt+i":
 		m.mode = modeImport
 		m.scanning = true
 		m.importItems = nil
@@ -2111,7 +2110,7 @@ func (m *Model) keyNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return importScanMsg{items: all}
 		}
 
-	case "r":
+	case "alt+r":
 		r := m.selectedRow()
 		if r == nil {
 			return m, nil
@@ -2125,17 +2124,17 @@ func (m *Model) keyNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.startInput(modeRename, "rename session", sess.Name)
 		}
 
-	case "m":
+	case "alt+m":
 		if id := m.selectedSessionID(); id != "" {
 			m.openGroupPick(id)
 		}
 
-	case "J", "shift+down":
+	case "alt+J", "shift+down":
 		m.reorder(1)
-	case "K", "shift+up":
+	case "alt+K", "shift+up":
 		m.reorder(-1)
 
-	case "z": // z as in the zz badge dormant sessions wear
+	case "alt+z": // z as in the zz badge dormant sessions wear
 		id := m.selectedSessionID()
 		if id == "" || !m.isLive(id) {
 			return m, nil
@@ -2154,7 +2153,7 @@ func (m *Model) keyNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return nil
 		})
 
-	case "u":
+	case "alt+u":
 		id := m.lastClosed
 		s := m.st.Session(id)
 		if id == "" || s == nil {
@@ -2168,7 +2167,7 @@ func (m *Model) keyNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.selectSession(id)
 
-	case "x", "d", "backspace", "delete":
+	case "alt+x":
 		r := m.selectedRow()
 		if r == nil {
 			return m, nil
@@ -2204,33 +2203,19 @@ func (m *Model) keyNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return nil
 		})
 
-	case "?":
+	case "alt+?":
 		m.mode = modeHelp
+
+	default:
+		// A bare printable key does NOTHING here by design: this is the pane
+		// people type prose into believing an agent has focus. Say so instead
+		// of silently eating the keystroke.
+		if r := []rune(key); len(r) == 1 && unicode.IsPrint(r[0]) {
+			m.flash(fmt.Sprintf("this is the desk — keys need %s (%s+? lists them)",
+				optName(), optName()), false)
+		}
 	}
 	return m, nil
-}
-
-// cycleTab moves the viewport to the next/previous visible tab (members of
-// collapsed groups are skipped, matching the strip).
-func (m *Model) cycleTab(d int) {
-	var liveIDs []string
-	for _, it := range m.tabItems() {
-		if it.kind == rowSession {
-			liveIDs = append(liveIDs, it.id)
-		}
-	}
-	if len(liveIDs) == 0 {
-		return
-	}
-	cur := 0
-	for i, id := range liveIDs {
-		if id == m.activeID {
-			cur = i
-		}
-	}
-	next := (cur + d + len(liveIDs)) % len(liveIDs)
-	m.open(liveIDs[next], false)
-	m.selectSession(liveIDs[next])
 }
 
 // reorder moves the selected session or group up/down.
