@@ -60,7 +60,10 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
         with:
-          go-version: stable
+          # The module's own toolchain, NOT stable: the day a new Go ships,
+          # staticcheck's latest release can't read its export data yet, and
+          # lint would break with zero changes here.
+          go-version-file: go.mod
       - name: staticcheck
         run: |
           go install honnef.co/go/tools/cmd/staticcheck@latest
