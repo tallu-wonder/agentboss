@@ -56,13 +56,17 @@ jobs:
 
   lint:
     runs-on: ubuntu-latest
+    # The tools and the Go release train drift in BOTH directions: the day a
+    # new Go ships, staticcheck's release can't read its export data yet; the
+    # day staticcheck requires that new Go, a pinned older toolchain can't
+    # build it. GOTOOLCHAIN=auto lets each tool pull the toolchain it asks
+    # for, while the module under analysis keeps declaring its own in go.mod.
+    env:
+      GOTOOLCHAIN: auto
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
         with:
-          # The module's own toolchain, NOT stable: the day a new Go ships,
-          # staticcheck's latest release can't read its export data yet, and
-          # lint would break with zero changes here.
           go-version-file: go.mod
       - name: staticcheck
         run: |
