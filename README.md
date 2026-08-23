@@ -114,10 +114,15 @@ agent has the keyboard, and "1. first do this" must not be able to switch
 sessions, close tabs, or start anything. Only keys that can't appear in prose
 stay plain: `enter`, `tab`, `esc`, arrows, paging, and the mouse.
 
-Three chords work **from anywhere on the desk, inside an agent included** —
-tmux intercepts them before the agent sees them, and your keyboard stays where
-it is: `opt+[` / `opt+]` (previous / next), `opt+1`…`opt+9` (n-th open
-session, tab order), `opt+a` (next session needing you).
+**The whole keymap works from anywhere on the desk, inside an agent
+included** — the desk is one application, not per-pane islands. tmux
+intercepts the chord before the agent sees it. Switching keys (`opt+[` /
+`opt+]`, `opt+1`…`opt+9`, `opt+a`) leave your keyboard where it is; action
+chords target the session on screen, and anything that opens a prompt, picker
+or confirmation (`opt+n`, `opt+z`, `opt+/`, …) brings your keyboard to the
+sidebar to answer it. The cost is that agents never see these `opt` chords —
+if one of yours needs them, `AGENTBOSS_GLOBAL_KEYS=switch` restores the
+switching-only set.
 
 | Key | Action |
 | --- | --- |
@@ -187,7 +192,8 @@ All optional; agentboss works with none of it.
 | `AGENTBOSS_OPEN_CMD` | `open` / `xdg-open` | what `f` and `F` open folders with (`code -n` works) |
 | `AGENTBOSS_NO_HOOKS` | unset | set to anything to never touch Claude Code's `settings.json` |
 | `AGENTBOSS_PRICING` | `~/.agentboss/pricing.json` | override the cost estimate's rates |
-| `AGENTBOSS_WORKTREE_DIR` | `<repo-parent>/.worktrees` | where `W` puts new git worktrees |
+| `AGENTBOSS_WORKTREE_DIR` | `<repo-parent>/.worktrees` | where `opt+W` puts new git worktrees |
+| `AGENTBOSS_GLOBAL_KEYS` | `all` | `switch` limits the from-inside-an-agent keys to session switching |
 | `AGENTBOSS_CODEX_HOME` | `~/.codex` | where Codex keeps its config and sessions |
 
 Rates drift, so the cost estimate is overridable — `{"opus": [5, 25], "sonnet":

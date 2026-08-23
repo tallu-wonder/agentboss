@@ -119,6 +119,11 @@ type Model struct {
 	// notice; this catches the one you notice a beat later.
 	lastClosed string
 
+	// pending carries tea.Cmds produced while draining queued commands (a
+	// chord run from inside an agent can start the import scan, say), to be
+	// batched into the tick's return.
+	pending []tea.Cmd
+
 	// pendingDir carries the folder from the new-session prompt to the
 	// agent picker.
 	pendingDir string
@@ -776,6 +781,14 @@ func tabGlyph(k status.Kind, spin int) (string, string) {
 	}
 }
 
+// actNeedsSidebar lists the chords that open a prompt, picker, popup or
+// confirmation — run from inside an agent, they must bring the keyboard along.
+var actNeedsSidebar = map[string]bool{
+	"alt+n": true, "alt+W": true, "alt+N": true, "alt+i": true,
+	"alt+/": true, "alt+r": true, "alt+m": true, "alt+s": true, "alt+S": true,
+	"alt+v": true, "alt+?": true, "alt+z": true, "alt+x": true, "alt+q": true,
+}
+
 // drainCmds applies one-shot commands queued by helper subprocesses (tab
 // drag drops) — they can't write state.json themselves, the manager is its
 // single writer.
@@ -839,6 +852,25 @@ func (m *Model) drainCmds() {
 			}
 		case "archive":
 			m.archive(cmd.From)
+		case "act":
+			// A chord pressed while an agent had the keyboard. Act on the
+			// ACTIVE session — the one on screen — by selecting its row first,
+			// then running the exact handler the sidebar runs. Prompts,
+			// pickers and confirms pull focus to the sidebar, or they would
+			// be questions nobody can answer.
+			if m.mode != modeNormal {
+				continue // a popup is already up; don't stack surprises under it
+			}
+			key := tmuxctl.ActKey(cmd.To)
+			if m.activeID != "" {
+				m.selectSession(m.activeID)
+			}
+			if actNeedsSidebar[key] && m.sidebarPane != "" {
+				_ = tmuxctl.SelectPane(m.sidebarPane)
+			}
+			if _, c := m.keyNormalStr(key); c != nil {
+				m.pending = append(m.pending, c)
+			}
 		case "tabdrop":
 			if !m.sortManual() {
 				m.flash("sorted by "+m.st.SortMode+" — tab order follows the sort", false)
@@ -1443,6 +1475,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if time.Now().After(m.noticeUntil) {
 			m.notice = ""
 		}
+		if len(m.pending) > 0 {
+			cmds := append(m.pending, tickCmd())
+			m.pending = nil
+			return m, tea.Batch(cmds...)
+		}
 		return m, tickCmd()
 
 	case importScanMsg:
@@ -1901,7 +1938,13 @@ func gitInfo(dir string) string {
 // not be able to trigger anything. Only keys that cannot appear in prose stay
 // plain — enter, tab, esc, arrows, paging.
 func (m *Model) keyNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	key := msg.String()
+	return m.keyNormalStr(msg.String())
+}
+
+// keyNormalStr is keyNormal on the key's string form, so a chord queued from
+// inside an agent (via the tmux root bindings) runs the same handler a
+// sidebar keystroke does.
+func (m *Model) keyNormalStr(key string) (tea.Model, tea.Cmd) {
 	switch key {
 	case "ctrl+c": // the escape hatch stays instant
 		if m.dirty {

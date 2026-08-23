@@ -185,6 +185,63 @@ func bindDeskKey(binPath, key, arg string) error {
 	return err
 }
 
+// BindActionKeys makes the WHOLE keymap work from inside an agent — the desk
+// behaves like one application, not per-pane islands. Each chord is bound in
+// the root table with two guards: outside the manager session the keystroke
+// passes through untouched; inside it, a sidebar-focused press is fed to the
+// sidebar directly (the fast path Bubble Tea already handles), and an
+// agent-focused press is queued for the manager, which acts on the ACTIVE
+// session and pulls focus to the sidebar when the action needs a prompt.
+func BindActionKeys(binPath string, keys []string) error {
+	for _, k := range keys {
+		key := "M-" + k
+		_, err := run("bind-key", "-n", key,
+			"if", "-F", "#{==:#{session_name},"+ManagerSession+"}",
+			"if -F '#{==:#{@agentboss_role},sidebar}' 'send-keys "+key+
+				"' 'run-shell \""+binPath+" _act "+actToken(k)+"\"'",
+			"send-keys "+key)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// actToken spells a key for the run-shell command line. Punctuation gets a
+// word: the command string passes through a shell, where < > / ? are anything
+// but a letter.
+func actToken(k string) string {
+	switch k {
+	case "<":
+		return "lt"
+	case ">":
+		return "gt"
+	case "/":
+		return "slash"
+	case "?":
+		return "question"
+	}
+	return k // letters and "Space" are safe as-is
+}
+
+// ActKey is the inverse of actToken, yielding the Bubble Tea key string the
+// sidebar's keymap already handles.
+func ActKey(token string) string {
+	switch token {
+	case "lt":
+		return "alt+<"
+	case "gt":
+		return "alt+>"
+	case "slash":
+		return "alt+/"
+	case "question":
+		return "alt+?"
+	case "Space":
+		return "alt+ "
+	}
+	return "alt+" + token
+}
+
 // PaneInfo describes one pane of the manager window.
 type PaneInfo struct {
 	ID     string // "%3"

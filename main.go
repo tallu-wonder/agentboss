@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"runtime/debug"
 	"strings"
@@ -90,6 +91,18 @@ func returnKey() string {
 	return `C-\`
 }
 
+// actionKeys is every keymap chord beyond the switching set, bound desk-wide
+// so the whole keymap works from inside an agent. tmux key names ("Space" is
+// the space key); < > / ? travel as tokens (see tmuxctl.ActKey).
+var actionKeys = []string{
+	"n", "W", "N", "i", "r", "m", "J", "K", "s", "v", "f", "F", "M",
+	"c", "h", "z", "x", "u", "q", "Space", "<", ">", "/", "?",
+}
+
+// actTokenRe accepts what `_act` may carry: a single letter, or one of the
+// spelled-out tokens.
+var actTokenRe = regexp.MustCompile(`^([A-Za-z]|Space|lt|gt|slash|question)$`)
+
 // cycleKeys are the desk-wide previous/next session keys. They work while an
 // agent has the keyboard, which the sidebar's [ and ] cannot — alt+[ and alt+]
 // so the two sets of keys are the same keys.
@@ -145,6 +158,12 @@ func main() {
 			arg = os.Args[2]
 		}
 		runTab(arg) // best-effort; never propagate errors into tmux run-shell
+	case "_act":
+		// A keymap chord pressed while an agent held the keyboard: queue it
+		// for the manager, which acts on the active session.
+		if len(os.Args) > 2 && actTokenRe.MatchString(os.Args[2]) {
+			queueCmd("act", "", os.Args[2])
+		}
 	case "_tabclose":
 		arg := ""
 		if len(os.Args) > 2 {
@@ -209,6 +228,9 @@ environment:
                            (default M-[, i.e. opt/alt+[)
   AGENTBOSS_NEXT_KEY       next session, works inside an agent, tmux syntax
                            (default M-], i.e. opt/alt+])
+  AGENTBOSS_GLOBAL_KEYS    "all" (default): the whole keymap works from inside
+                           an agent; "switch": only the session-switching keys
+                           do, agents keep the other opt/alt chords
   AGENTBOSS_CODEX_HOME     where Codex config + sessions live (default ~/.codex)
   AGENTBOSS_OPEN_CMD       program that opens folders (default: open / xdg-open)
   AGENTBOSS_NOTIFY         desktop alerts: unset (default) | needsyou | all | off
@@ -339,6 +361,12 @@ func runUI() error {
 	prevKey, nextKey := cycleKeys()
 	_ = tmuxctl.BindCycleKeys(shellQuote(self), prevKey, nextKey)
 	_ = tmuxctl.BindSessionKeys(shellQuote(self))
+	// The whole keymap works from inside an agent (the desk is one
+	// application, not per-pane islands) — unless the user asks for the
+	// switching keys only, giving agents back the rest of the opt chords.
+	if os.Getenv("AGENTBOSS_GLOBAL_KEYS") != "switch" {
+		_ = tmuxctl.BindActionKeys(shellQuote(self), actionKeys)
+	}
 	_ = tmuxctl.BindStatusClicks(shellQuote(self))
 	tmuxctl.ConfigureServer()
 	tmuxctl.ConfigureManagerSession()

@@ -930,9 +930,9 @@ func (m *Model) viewHelp() string {
 		{k("o"), "open, keep focus here"},
 		{"ctrl+\\", "sidebar ⇄ session"},
 		{"tab", "focus the session"},
-		{k("[") + " " + k("]"), "prev / next — works anywhere"},
-		{k("1") + "-" + k("9"), "n-th open session — anywhere"},
-		{k("a"), "next needing you — anywhere"},
+		{k("[") + " " + k("]"), "prev / next session"},
+		{k("1") + "-" + k("9"), "n-th open session"},
+		{k("a"), "next session needing you"},
 		{k("/"), "search"},
 		{k("n"), "new session"},
 		{k("W"), "new session in a git worktree"},
@@ -976,6 +976,7 @@ func (m *Model) viewHelp() string {
 		" "+stWorking.Render("⠙ working ")+stAlert.Render("◆ needs you"),
 		" "+stNew.Render("● new ")+stIdle.Render("· idle ")+stDormant.Render("○ dormant"),
 		"",
+		" "+stDim.Render("every chord works from inside an agent too;"),
 		" "+stDim.Render("bare letters never act — stray typing is safe"),
 		" "+stDim.Render("tmux prefix here: ctrl+q · any key closes"))
 	for len(lines) < ih {

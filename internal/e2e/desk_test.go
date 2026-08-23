@@ -707,3 +707,58 @@ func TestWorktreeSession(t *testing.T) {
 		t.Errorf("the repo's own checkout moved to %q", strings.TrimSpace(string(out)))
 	}
 }
+
+// Action chords work from inside an agent: the whole keymap is desk-wide, not
+// per-pane. alt+z pressed while the agent holds the keyboard must close the
+// ACTIVE session's tab — confirm popup included, with focus pulled to the
+// sidebar so the question can be answered.
+func TestActionChordsWorkFromInsideAnAgent(t *testing.T) {
+	d := newDesk(t)
+	keep := d.newSession("keep")
+	d.keys("C-\\")
+	closeMe := d.newSession("close-me")
+	d.waitFor("both to be open", func() bool { return len(d.liveSessions()) == 2 })
+
+	// Put the keyboard in the agent, with a real client attached so root-table
+	// bindings can fire.
+	out, _ := d.tmux("list-panes", "-t", "agentboss:", "-F", "#{pane_id} #{@agentboss_role}")
+	viewport := ""
+	for _, l := range strings.Split(out, "\n") {
+		if id, role, ok := strings.Cut(strings.TrimSpace(l), " "); ok && role == "viewport" {
+			viewport = id
+		}
+	}
+	if _, err := d.tmux("select-pane", "-t", viewport); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.tmux("new-session", "-d", "-s", "holder", "-x", "160", "-y", "40",
+		"TMUX= tmux attach-session -t agentboss"); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(1500 * time.Millisecond)
+
+	// alt+z as raw bytes into the holder — exactly what a terminal sends.
+	if _, err := d.tmux("send-keys", "-t", "holder", "-H", "1b", "7a"); err != nil {
+		t.Fatal(err)
+	}
+	d.waitFor("the confirm popup to appear", func() bool {
+		return strings.Contains(d.sidebar(), "close \"close-me\"'s tab?")
+	})
+	// Focus must have come to the sidebar, or y would go to the agent.
+	out, _ = d.tmux("list-panes", "-t", "agentboss:", "-F", "#{pane_active} #{@agentboss_role}")
+	if !strings.Contains(out, "1 sidebar") {
+		t.Fatalf("focus did not move to the sidebar: %q", out)
+	}
+	d.keys("y")
+	d.waitFor("the active session's tab to close", func() bool {
+		for _, s := range d.liveSessions() {
+			if s == closeMe {
+				return false
+			}
+		}
+		return true
+	})
+	if live := d.liveSessions(); len(live) != 1 || live[0] != keep {
+		t.Errorf("wrong session closed: still live %v", live)
+	}
+}
