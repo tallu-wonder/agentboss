@@ -56,23 +56,26 @@ jobs:
 
   lint:
     runs-on: ubuntu-latest
-    # The tools and the Go release train drift in BOTH directions: the day a
-    # new Go ships, staticcheck's release can't read its export data yet; the
-    # day staticcheck requires that new Go, a pinned older toolchain can't
-    # build it. GOTOOLCHAIN=auto lets each tool pull the toolchain it asks
-    # for, while the module under analysis keeps declaring its own in go.mod.
-    env:
-      GOTOOLCHAIN: auto
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
+      # The tools and the Go release train drift in BOTH directions: the day a
+      # new Go ships, staticcheck's release can't read its export data yet; the
+      # day staticcheck requires that new Go, a pinned older toolchain can't
+      # build it. GOTOOLCHAIN=auto lets each tool pull the toolchain it asks
+      # for, while the module under analysis keeps declaring its own in go.mod.
+      # Set per step: setup-go exports GOTOOLCHAIN=local, which outranks job env.
       - name: staticcheck
+        env:
+          GOTOOLCHAIN: auto
         run: |
           go install honnef.co/go/tools/cmd/staticcheck@latest
           staticcheck ./...
       - name: govulncheck
+        env:
+          GOTOOLCHAIN: auto
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest
           govulncheck ./...
