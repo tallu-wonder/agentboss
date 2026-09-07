@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/tallu-wonder/agentboss/internal/agents"
 	"github.com/tallu-wonder/agentboss/internal/state"
 	"github.com/tallu-wonder/agentboss/internal/status"
 	"github.com/tallu-wonder/agentboss/internal/tmuxctl"
@@ -259,6 +261,88 @@ func TestNamesUseEmptyMetricSpaceAndTabNumbersStayStable(t *testing.T) {
 	m.buildRows()
 	if m.nthSession(3) < 0 || m.nthSession(1) != -1 {
 		t.Fatal("filter renumbered the tabs")
+	}
+}
+
+func TestRowMetricsStayAligned(t *testing.T) {
+	for _, width := range []int{65, 67, 100} {
+		t.Run(fmt.Sprint(width), func(t *testing.T) {
+			m := uxModel(t)
+			m.st.ShowMetrics = true
+			cases := []struct {
+				family, agent, context, cost string
+				tokens                       int
+				total                        float64
+				kind                         status.Kind
+			}{
+				{"opus", state.AgentClaude, "~9%", "$0.42", 90_000, .42, status.Working},
+				{"sonnet", state.AgentClaude, "~70%", "$12.3", 700_000, 12.3, status.NeedsYou},
+				{"haiku", state.AgentClaude, "~100%", "$128", 1_000_000, 128, status.Attention},
+				{"gpt-5.6", state.AgentCodex, "85%", "", 850_000, 0, status.Idle},
+				{"opus", state.AgentClaude, "~90%", "$99999", 900_000, 99999, status.Dormant},
+				{"", state.AgentClaude, "", "", 0, 0, status.Idle},
+			}
+			modelStart, contextEnd, costEnd := -1, -1, -1
+			for i, tc := range cases {
+				group := ""
+				if i%2 == 1 {
+					group = m.st.Groups[0].ID
+				}
+				id := m.st.AddSession("任务 payments refactor", "/tmp/very-long-project-name-that-must-not-shift-the-metrics", group)
+				m.st.Session(id).Agent = tc.agent
+				m.nameProbes[id] = &nameProbe{
+					info: agents.Info{Family: tc.family, ContextTokens: tc.tokens, ContextWindow: 1_000_000},
+					cost: agents.CostState{Total: tc.total},
+				}
+				if tc.kind != status.Dormant {
+					m.live[state.TmuxName(id)] = tmuxctl.Info{}
+				}
+				m.runtime[id] = status.Runtime{Status: tc.kind, UpdatedAt: time.Now()}
+				line := ansi.Strip(m.renderSessionRow(id, i+1, width))
+				if got := ansi.StringWidth(line); got != width {
+					t.Fatalf("%s: row width = %d, want %d: %q", tc.kind, got, width, line)
+				}
+				if strings.Contains(line, "ctx ") || strings.Contains(line, "est ") {
+					t.Fatalf("redundant row labels: %q", line)
+				}
+				if tc.family != "" {
+					at := strings.Index(line, tc.family)
+					if at < 0 {
+						t.Fatalf("missing model %q: %q", tc.family, line)
+					}
+					start := ansi.StringWidth(line[:at])
+					if modelStart < 0 {
+						modelStart = start
+					} else if start != modelStart {
+						t.Fatalf("model moved from column %d to %d: %q", modelStart, start, line)
+					}
+				}
+				for _, metric := range []struct {
+					value string
+					end   *int
+				}{{tc.context, &contextEnd}, {tc.cost, &costEnd}} {
+					if metric.value == "" {
+						continue
+					}
+					at := strings.Index(line, metric.value)
+					if at < 0 {
+						t.Fatalf("missing metric %q: %q", metric.value, line)
+					}
+					end := ansi.StringWidth(line[:at+len(metric.value)])
+					if *metric.end < 0 {
+						*metric.end = end
+					} else if end != *metric.end {
+						t.Fatalf("%s moved from column %d to %d: %q", metric.value, *metric.end, end, line)
+					}
+				}
+				if tc.cost == "" && strings.Contains(line, "$") {
+					t.Fatalf("unknown cost rendered as a price: %q", line)
+				}
+				if tc.context == "" && strings.Contains(line, "%") {
+					t.Fatalf("unknown context rendered as a percentage: %q", line)
+				}
+			}
+		})
 	}
 }
 

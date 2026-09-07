@@ -134,19 +134,26 @@ func (m *Model) updateBranch() {
 }
 
 func (m *Model) contextLabel(id string) string {
+	if value := m.contextValue(id); value != "" {
+		return "ctx " + value
+	}
+	return ""
+}
+
+func (m *Model) contextValue(id string) string {
 	tokens := m.tokensOf(id)
 	if tokens <= 0 {
 		return ""
 	}
 	window := m.contextWindowOf(id)
 	if window <= 0 {
-		return "ctx " + fmtTokens(tokens)
+		return fmtTokens(tokens)
 	}
 	prefix := ""
 	if s := m.st.Session(id); s != nil && s.AgentOf() == "claude" {
 		prefix = "~"
 	}
-	return fmt.Sprintf("ctx %s%d%%", prefix, tokens*100/window)
+	return fmt.Sprintf("%s%d%%", prefix, tokens*100/window)
 }
 
 func (m *Model) selectedDetails() []string {

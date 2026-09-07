@@ -191,7 +191,8 @@ only the agents that were previously running.
 
 The sidebar reserves space for session names and statuses. The selected session's
 project, branch, agent, context percentage and estimated conversation cost appear
-below the list. `opt+t` adds context/cost to rows when the sidebar is wide enough.
+below the list. `opt+t` adds aligned model, context and cost columns to wide rows.
+Models retain their colors; context turns yellow at 60% and red at 85% utilization.
 The persistent **Typing** line identifies the pane receiving input; `›` marks the
 selected row, `▎` the displayed session, and `✓` selected batch entries.
 

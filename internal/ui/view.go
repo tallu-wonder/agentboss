@@ -90,13 +90,15 @@ func (m *Model) listInnerHeight() int { return max(0, m.height-4) } // header, r
 
 // ---- helpers ---------------------------------------------------------
 
-// Widths of the fixed right-hand columns. "$1600" and "1.2M" are the widest
-// values each can hold.
+// Widths of the compact metric columns, measured in terminal cells.
 const (
-	costW  = 6
-	modelW = 7
-	tokenW = 4
-	ageW   = 3
+	costW    = 6
+	modelW   = 7
+	tokenW   = 4
+	ageW     = 3
+	contextW = 6
+	statusW  = 9 // "needs you"; shorter states must not shift numeric columns
+	projectW = 18
 )
 
 // blank is an empty cell that still occupies its column.
@@ -449,19 +451,18 @@ func (m *Model) renderSessionRow(id string, num, w int) string {
 	label := map[status.Kind]string{status.Working: "working", status.NeedsYou: "needs you", status.Attention: "new", status.Idle: "idle", status.Dormant: "stopped"}[k]
 	right := style.Render(label)
 	if m.st.ShowMetrics && w >= 65 {
-		var metrics []string
-		if ctx := m.contextLabel(id); ctx != "" {
-			metrics = append(metrics, ctx)
+		// Reserve the same cells on every row, including missing/unpriced
+		// values, so numbers stay aligned across agents and status changes.
+		model := familyStyle(m.familyOf(id)).Render(pad(m.familyOf(id), modelW))
+		context := tokenStyle(m.tokensOf(id), m.contextWindowOf(id)).Render(padNum(m.contextValue(id), contextW))
+		cost := blank(costW)
+		if value := m.costOf(id); value >= .01 {
+			cost = stText.Render(padNum(fmtUSD(value), costW))
 		}
-		if cost := m.costOf(id); cost >= .01 {
-			metrics = append(metrics, "est "+fmtUSD(cost))
-		}
-		if len(metrics) > 0 {
-			right = stDim.Render(strings.Join(metrics, " · ")) + " " + right
-		}
+		right = model + " " + context + " " + cost + "  " + style.Render(pad(label, statusW))
 	}
 	if w >= 90 {
-		right = stDim.Render(shortProject(s.Dir)) + " · " + right
+		right = stDim.Render(pad(shortProject(s.Dir), projectW)) + " · " + right
 	}
 	avail := w - ansi.StringWidth(left+right) - 1
 	nameStyle := stText
