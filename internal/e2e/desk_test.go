@@ -913,22 +913,24 @@ func TestActionChordsWorkFromInsideAnAgent(t *testing.T) {
 	width, _ := strconv.Atoi(fields[1])
 	top, _ := strconv.Atoi(fields[2])
 	height, _ := strconv.Atoi(fields[3])
-	boxTop, boxBottom := -1, -1
+	boxLeft, boxRight, boxTop, boxBottom := -1, -1, -1, -1
 	for y, line := range strings.Split(holder(), "\n") {
-		if strings.Contains(line, "╭") {
+		if at := strings.Index(line, "╭"); at >= 0 {
 			boxTop = y
+			boxLeft = ansi.StringWidth(line[:at])
+			if end := strings.Index(line, "╮"); end > at {
+				boxRight = ansi.StringWidth(line[:end])
+			}
 		}
 		if strings.Contains(line, "╰") {
 			boxBottom = y
 		}
-		if at := strings.Index(line, "Stop session?"); at >= 0 {
-			x := ansi.StringWidth(line[:at])
-			// Dialogs are 64 cells wide here; their title is three cells in.
-			want := left + (width-64)/2 + 3
-			if x != want {
-				t.Fatalf("dialog is not centered over viewport: title column %d, want %d\n%s", x, want, holder())
-			}
-		}
+	}
+	// The popup shrinks to fit narrow viewports, including Linux tmux's
+	// smaller detached windows. Check the actual box, with one cell for rounding.
+	centerDeltaX := boxLeft + boxRight + 1 - (2*left + width)
+	if boxLeft < left || boxRight >= left+width || boxRight < boxLeft || centerDeltaX < -1 || centerDeltaX > 1 {
+		t.Fatalf("dialog is not horizontally centered: bounds %d..%d, pane left %d width %d\n%s", boxLeft, boxRight, left, width, holder())
 	}
 	// The manager has one status row above the panes. Allow one cell for
 	// rounding when a dialog and its pane have different height parity.
