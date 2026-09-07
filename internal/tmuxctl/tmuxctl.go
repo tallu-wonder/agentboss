@@ -191,14 +191,14 @@ func bindDeskKey(binPath, key, arg string) error {
 // passes through untouched; inside it, a sidebar-focused press is fed to the
 // sidebar directly (the fast path Bubble Tea already handles), and an
 // agent-focused press is queued for the manager, which acts on the ACTIVE
-// session and pulls focus to the sidebar when the action needs a prompt.
+// session. Preserve the originating pane and client for dialogs.
 func BindActionKeys(binPath string, keys []string) error {
 	for _, k := range keys {
 		key := "M-" + k
 		_, err := run("bind-key", "-n", key,
 			"if", "-F", "#{==:#{session_name},"+ManagerSession+"}",
 			"if -F '#{==:#{@agentboss_role},sidebar}' 'send-keys "+key+
-				"' 'run-shell \""+binPath+" _act "+actToken(k)+"\"'",
+				"' 'run-shell \""+binPath+" _act "+actToken(k)+" #{pane_id} #{client_tty}\"'",
 			"send-keys "+key)
 		if err != nil {
 			return err
@@ -482,7 +482,7 @@ func BindStatusClicks(binPath string) error {
 	}
 	if _, err := run("bind-key", "-T", "root", "MouseDown2Status",
 		"if", "-F", "#{==:#{session_name},"+ManagerSession+"}",
-		"run-shell \""+binPath+" _tabclose '#{mouse_status_range}'\"", ""); err != nil {
+		"run-shell \""+binPath+" _tabclose '#{mouse_status_range}' #{pane_id} #{client_tty}\"", ""); err != nil {
 		return err
 	}
 	// Dragging a tab: MouseDown1Status (above, via _tab) records the grabbed
@@ -495,7 +495,7 @@ func BindStatusClicks(binPath string) error {
 	// Right-click a tab: context menu (open / close / close → old).
 	_, err := run("bind-key", "-T", "root", "MouseDown3Status",
 		"if", "-F", "#{==:#{session_name},"+ManagerSession+"}",
-		"run-shell \""+binPath+" _tabmenu '#{mouse_status_range}' '#{mouse_x}'\"", "")
+		"run-shell \""+binPath+" _tabmenu '#{mouse_status_range}' '#{mouse_x}' #{pane_id} #{client_tty}\"", "")
 	return err
 }
 

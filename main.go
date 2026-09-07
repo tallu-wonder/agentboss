@@ -150,6 +150,12 @@ func main() {
 		err = runUI()
 	case "__viewport":
 		runViewportPlaceholder()
+	case "__dialog":
+		if len(os.Args) != 3 {
+			err = fmt.Errorf("dialog request is required")
+		} else {
+			err = ui.RunPaneDialog(os.Args[2])
+		}
 	case "_tab":
 		arg := ""
 		if len(os.Args) > 2 {
@@ -160,14 +166,16 @@ func main() {
 		// A keymap chord pressed while an agent held the keyboard: queue it
 		// for the manager, which acts on the active session.
 		if len(os.Args) > 2 && actTokenRe.MatchString(os.Args[2]) {
-			queueCmd("act", "", os.Args[2])
+			queueCmd("act", "", os.Args[2], os.Args[3:]...)
 		}
 	case "_tabclose":
 		arg := ""
 		if len(os.Args) > 2 {
 			arg = os.Args[2]
 		}
-		runTabClose(arg)
+		if len(os.Args) > 2 {
+			runTabClose(arg, os.Args[3:]...)
+		}
 	case "_tabdrop":
 		arg := ""
 		if len(os.Args) > 2 {
@@ -182,13 +190,19 @@ func main() {
 		if len(os.Args) > 3 {
 			mx = os.Args[3]
 		}
-		runTabMenu(arg, mx)
+		if len(os.Args) > 3 {
+			runTabMenu(arg, mx, os.Args[4:]...)
+		} else {
+			runTabMenu(arg, mx)
+		}
 	case "_tabold":
 		arg := ""
 		if len(os.Args) > 2 {
 			arg = os.Args[2]
 		}
-		runTabOld(arg)
+		if len(os.Args) > 2 {
+			runTabOld(arg, os.Args[3:]...)
+		}
 	case "version", "--version", "-v":
 		fmt.Println("agentboss", buildVersion())
 	case "help", "--help", "-h":
@@ -487,10 +501,10 @@ func runViewportPlaceholder() {
 }
 
 // runTabClose queues the same stop confirmation used by keyboard actions.
-func runTabClose(arg string) {
+func runTabClose(arg string, origin ...string) {
 	arg = strings.TrimPrefix(arg, "user|")
 	if state.ValidID(arg) && arg != "manager" {
-		queueCmd("stop", arg, "")
+		queueCmd("stop", arg, "", origin...)
 	}
 }
 
@@ -574,8 +588,19 @@ func runFocus(id string) {
 	_ = exec.Command("osascript", "-e", "tell application \""+host.App+"\" to activate").Run()
 }
 
-func queueCmd(op, from, to string) {
-	cmd, _ := json.Marshal(map[string]string{"op": op, "from": from, "to": to})
+func queueCmd(op, from, to string, source ...string) {
+	origin := tmuxctl.PopupOrigin{}
+	if op == "act" || op == "stop" || op == "archive" || op == "tabmenu" {
+		pane, client := "", ""
+		if len(source) > 0 {
+			pane = source[0]
+		}
+		if len(source) > 1 {
+			client = source[1]
+		}
+		origin = tmuxctl.CapturePopupOrigin(pane, client)
+	}
+	cmd, _ := json.Marshal(map[string]any{"op": op, "from": from, "to": to, "origin": origin})
 	_ = os.MkdirAll(paths.CmdDir(), 0o755)
 	_ = os.WriteFile(filepath.Join(paths.CmdDir(), fmt.Sprintf("%s-%d.json", op, time.Now().UnixNano())), cmd, 0o600)
 }
@@ -663,17 +688,15 @@ func installCodexNotify(verbose, force bool) error {
 	return nil
 }
 
-// runTabOld archives a session from the tab context menu: kill the process
-// now, queue the desk change for the manager.
-func runTabOld(arg string) {
+// runTabOld queues archive confirmation; the manager applies it after approval.
+func runTabOld(arg string, origin ...string) {
 	arg = strings.TrimPrefix(arg, "user|")
 	if arg == "" || arg == "manager" || strings.HasPrefix(arg, "grp:") {
 		return
 	}
-	if name := state.TmuxName(arg); tmuxctl.Has(name) {
-		_ = tmuxctl.KillSession(name)
+	if state.ValidID(arg) {
+		queueCmd("archive", arg, "", origin...)
 	}
-	queueCmd("archive", arg, "")
 }
 
 // runTabMenu shows a native tmux popup menu for the right-clicked tab.
@@ -684,7 +707,7 @@ func runTabOld(arg string) {
 // issues the command — this runs as a separate process, so the release killed it
 // every time. Handing the click to the manager gets the desk's own menu, which
 // stays up, carries the session's name, and uses the same keys as the sidebar.
-func runTabMenu(arg, _ string) {
+func runTabMenu(arg, _ string, origin ...string) {
 	arg = strings.TrimPrefix(arg, "user|")
 	if arg == "" || arg == "manager" || strings.HasPrefix(arg, "grp:") {
 		return
@@ -692,7 +715,7 @@ func runTabMenu(arg, _ string) {
 	if !state.ValidID(arg) {
 		return
 	}
-	queueCmd("tabmenu", "", arg)
+	queueCmd("tabmenu", "", arg, origin...)
 }
 
 // runTab handles clicks on the tab bar and [ ] cycling, invoked by tmux

@@ -118,11 +118,12 @@ stay plain: `enter`, `tab`, `esc`, arrows, paging, and the mouse.
 included** — the desk is one application, not per-pane islands. tmux
 intercepts the chord before the agent sees it. Switching keys (`opt+[` /
 `opt+]`, `opt+1`…`opt+9`, `opt+a`) leave your keyboard where it is; action
-chords target the session on screen, and anything that opens a prompt, picker
-or confirmation (`opt+n`, `opt+z`, `opt+/`, …) brings your keyboard to the
-sidebar to answer it. The cost is that agents never see these `opt` chords —
-if one of yours needs them, `AGENTBOSS_GLOBAL_KEYS=switch` restores the
-switching-only set.
+chords target the session on screen, and anything that opens a prompt or picker
+(`opt+n`, `opt+/`, …) brings your keyboard to the sidebar to answer it.
+Confirmations, help and session info open centered over the pane that triggered
+them, with keyboard focus returning there when dismissed. Agents never see these
+`opt` chords. If one of yours needs them, `AGENTBOSS_GLOBAL_KEYS=switch` restores
+the switching-only set.
 
 | Key | Action |
 | --- | --- |
@@ -203,8 +204,9 @@ New sessions use a dialog with recent folders, visible Tab completion candidates
 and persistent validation. Arrow keys choose a folder. Shift+Tab goes back from a
 worktree name; Left or Shift+Tab goes back from agent selection. A worktree is
 created only when the agent choice is submitted. Help, session info and long
-confirmations scroll with arrows/Page Up/Page Down and close with Escape. Long
-form errors scroll with Alt+Up/Down.
+confirmations scroll with arrows/Page Up/Page Down and close with Escape.
+Confirmations require `y`; Enter never approves them. A pane too small to host a
+dialog uses the sidebar. Long form errors scroll with Alt+Up/Down.
 
 ## How it works
 

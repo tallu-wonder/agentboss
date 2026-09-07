@@ -27,18 +27,22 @@ func fitLines(lines []string, w, h int) string {
 // The footer stays visible while the content scrolls. Never crop an action's
 // consequence or discard information just because the sidebar is narrow.
 func (m *Model) scrollBox(lines []string, hint string) string {
-	w := max(8, m.width-6)
+	return renderScrollBox(lines, hint, m.width, m.listInnerHeight(), &m.scroll)
+}
+
+func renderScrollBox(lines []string, hint string, width, height int, scroll *int) string {
+	w := max(8, width-6)
 	var content []string
 	for _, line := range lines {
 		content = append(content, strings.Split(ansi.Wrap(line, w, ""), "\n")...)
 	}
 	foot := strings.Split(ansi.Wrap(hint, w, ""), "\n")
-	visible := max(1, m.listInnerHeight()-len(foot)-3)
-	m.scroll = max(0, min(m.scroll, max(0, len(content)-visible)))
-	end := min(len(content), m.scroll+visible)
-	shown := append([]string{}, content[m.scroll:end]...)
+	visible := max(1, height-len(foot)-3)
+	*scroll = max(0, min(*scroll, max(0, len(content)-visible)))
+	end := min(len(content), *scroll+visible)
+	shown := append([]string{}, content[*scroll:end]...)
 	if len(content) > visible {
-		shown = append(shown, stDim.Render(fmt.Sprintf("↑↓ %d–%d / %d", m.scroll+1, end, len(content))))
+		shown = append(shown, stDim.Render(fmt.Sprintf("↑↓ %d–%d / %d", *scroll+1, end, len(content))))
 	} else {
 		shown = append(shown, "")
 	}
@@ -74,7 +78,9 @@ func (m *Model) keyScroll(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m *Model) viewFocus() string {
 	text := "Typing into: sidebar"
-	if m.unfocused {
+	if m.dialogActive {
+		text = "Typing into: dialog"
+	} else if m.unfocused {
 		if s := m.st.Session(m.activeID); s != nil {
 			agent := " · " + s.AgentOf()
 			text = "Typing: " + pad(s.Name, max(1, m.width-9-ansi.StringWidth(agent))) + agent

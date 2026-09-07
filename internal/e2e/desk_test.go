@@ -26,6 +26,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/charmbracelet/x/ansi"
 )
 
 // desk is one isolated agentboss under test.
@@ -843,8 +845,8 @@ func TestWorktreeSession(t *testing.T) {
 
 // Action chords work from inside an agent: the whole keymap is desk-wide, not
 // per-pane. alt+z pressed while the agent holds the keyboard must close the
-// ACTIVE session's tab — confirm popup included, with focus pulled to the
-// sidebar so the question can be answered.
+// ACTIVE session's tab. The confirmation belongs over the source viewport,
+// and cancelling it must leave both the process and keyboard focus intact.
 func TestActionChordsWorkFromInsideAnAgent(t *testing.T) {
 	d := newDesk(t)
 	keep := d.newSession("keep")
@@ -874,15 +876,63 @@ func TestActionChordsWorkFromInsideAnAgent(t *testing.T) {
 	if _, err := d.tmux("send-keys", "-t", "holder", "-H", "1b", "7a"); err != nil {
 		t.Fatal(err)
 	}
-	d.waitFor("the confirm popup to appear", func() bool {
-		return strings.Contains(d.sidebar(), "Stop session?")
-	})
-	// Focus must have come to the sidebar, or y would go to the agent.
-	out, _ = d.tmux("list-panes", "-t", "agentboss:", "-F", "#{pane_active} #{@agentboss_role}")
-	if !strings.Contains(out, "1 sidebar") {
-		t.Fatalf("focus did not move to the sidebar: %q", out)
+	holder := func() string {
+		text, _ := d.tmux("capture-pane", "-p", "-t", "holder")
+		return text
 	}
-	d.keys("y")
+	d.waitFor("the confirm popup to appear", func() bool {
+		return strings.Contains(holder(), "Stop session?")
+	})
+	if strings.Contains(d.sidebar(), "Stop session?") {
+		t.Fatal("confirmation was drawn in the sidebar")
+	}
+	geometry, _ := d.tmux("display-message", "-p", "-t", viewport, "#{pane_left} #{pane_width} #{pane_top} #{pane_height}")
+	fields := strings.Fields(geometry)
+	left, _ := strconv.Atoi(fields[0])
+	width, _ := strconv.Atoi(fields[1])
+	top, _ := strconv.Atoi(fields[2])
+	height, _ := strconv.Atoi(fields[3])
+	boxTop, boxBottom := -1, -1
+	for y, line := range strings.Split(holder(), "\n") {
+		if strings.Contains(line, "╭") {
+			boxTop = y
+		}
+		if strings.Contains(line, "╰") {
+			boxBottom = y
+		}
+		if at := strings.Index(line, "Stop session?"); at >= 0 {
+			x := ansi.StringWidth(line[:at])
+			// Dialogs are 64 cells wide here; their title is three cells in.
+			want := left + (width-64)/2 + 3
+			if x != want {
+				t.Fatalf("dialog is not centered over viewport: title column %d, want %d\n%s", x, want, holder())
+			}
+		}
+	}
+	// The manager has one status row above the panes. Allow one cell for
+	// rounding when a dialog and its pane have different height parity.
+	centerDelta := boxTop + boxBottom + 1 - (2*(top+1) + height)
+	if boxTop < 0 || boxBottom < 0 || centerDelta < -1 || centerDelta > 1 {
+		t.Fatalf("dialog is not vertically centered: bounds %d..%d, pane top %d height %d\n%s", boxTop, boxBottom, top, height, holder())
+	}
+	out, _ = d.tmux("list-panes", "-t", "agentboss:", "-F", "#{pane_active} #{@agentboss_role}")
+	if !strings.Contains(out, "1 viewport") {
+		t.Fatalf("dialog moved focus out of its source pane: %q", out)
+	}
+	if _, err := d.tmux("send-keys", "-t", "holder", "Escape"); err != nil {
+		t.Fatal(err)
+	}
+	d.waitFor("confirmation to cancel", func() bool { return !strings.Contains(holder(), "Stop session?") })
+	if len(d.liveSessions()) != 2 {
+		t.Fatal("canceling the popup stopped an agent")
+	}
+	if _, err := d.tmux("send-keys", "-t", "holder", "-H", "1b", "7a"); err != nil {
+		t.Fatal(err)
+	}
+	d.waitFor("another confirmation", func() bool { return strings.Contains(holder(), "Stop session?") })
+	if _, err := d.tmux("send-keys", "-t", "holder", "y"); err != nil {
+		t.Fatal(err)
+	}
 	d.waitFor("the active session's tab to close", func() bool {
 		for _, s := range d.liveSessions() {
 			if s == closeMe {
@@ -893,5 +943,45 @@ func TestActionChordsWorkFromInsideAnAgent(t *testing.T) {
 	})
 	if live := d.liveSessions(); len(live) != 1 || live[0] != keep {
 		t.Errorf("wrong session closed: still live %v", live)
+	}
+	for _, dialog := range []struct{ hex, title string }{{"76", "process"}, {"3f", "Keys and status"}, {"71", "quit agentboss?"}} {
+		if _, err := d.tmux("send-keys", "-t", "holder", "-H", "1b", dialog.hex); err != nil {
+			t.Fatal(err)
+		}
+		d.waitFor(dialog.title+" dialog", func() bool { return strings.Contains(holder(), dialog.title) })
+		if strings.Contains(d.sidebar(), dialog.title) {
+			t.Fatalf("%s dialog was shown in the sidebar", dialog.title)
+		}
+		if _, err := d.tmux("send-keys", "-t", "holder", "Escape"); err != nil {
+			t.Fatal(err)
+		}
+		d.waitFor(dialog.title+" to close", func() bool { return !strings.Contains(holder(), dialog.title) })
+		role, _ := d.tmux("display-message", "-p", "-t", "agentboss:", "#{@agentboss_role}")
+		if strings.TrimSpace(role) != "viewport" {
+			t.Fatalf("%s did not return focus to the viewport", dialog.title)
+		}
+	}
+	for _, action := range []struct{ command, title string }{{"_tabclose", "Stop session?"}, {"_tabold", "Archive session?"}} {
+		cmd := exec.Command(d.bin, action.command, keep, viewport)
+		cmd.Env = append(os.Environ(), "AGENTBOSS_HOME="+d.home, "TMUX_TMPDIR="+d.socket)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("%s: %s (%v)", action.command, out, err)
+		}
+		d.waitFor(action.title, func() bool { return strings.Contains(holder(), action.title) })
+		if len(d.liveSessions()) != 1 {
+			t.Fatalf("%s stopped the process before confirmation", action.command)
+		}
+		if _, err := d.tmux("send-keys", "-t", "holder", "n"); err != nil {
+			t.Fatal(err)
+		}
+		d.waitFor(action.title+" to cancel", func() bool { return !strings.Contains(holder(), action.title) })
+		if len(d.liveSessions()) != 1 {
+			t.Fatalf("canceling %s stopped the process", action.command)
+		}
+		for _, session := range d.state().Sessions {
+			if session.ID == keep && session.Archived {
+				t.Fatal("canceling changed the session's archived state")
+			}
+		}
 	}
 }

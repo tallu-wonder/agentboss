@@ -176,8 +176,11 @@ type Model struct {
 	scanning    bool
 
 	// confirm
-	confirmMsg string
-	confirmFn  func() tea.Cmd
+	confirmMsg   string
+	confirmFn    func() tea.Cmd
+	dialogOrigin tmuxctl.PopupOrigin
+	dialogActive bool
+	dialogID     uint64
 
 	renameTarget row
 
@@ -809,8 +812,8 @@ func tabGlyph(k status.Kind, spin int) (string, string) {
 	}
 }
 
-// actNeedsSidebar lists the chords that open a prompt, picker, popup or
-// confirmation — run from inside an agent, they must bring the keyboard along.
+// actNeedsSidebar lists chords that need input. They focus the sidebar unless
+// their handler opens a dialog over the originating pane.
 var actNeedsSidebar = func() map[string]bool {
 	out := map[string]bool{}
 	for _, a := range keymap.Actions {
@@ -835,9 +838,15 @@ func (m *Model) drainCmds() {
 		if err != nil {
 			continue
 		}
-		var cmd struct{ Op, From, To string }
+		var cmd struct {
+			Op, From, To string
+			Origin       tmuxctl.PopupOrigin
+		}
 		if json.Unmarshal(data, &cmd) != nil {
 			continue
+		}
+		if m.dialogActive {
+			continue // one modal and one captured set of targets at a time
 		}
 		switch cmd.Op {
 		case "navigate":
@@ -853,6 +862,7 @@ func (m *Model) drainCmds() {
 			// A right-click on a tab opens the same menu a right-click on the
 			// row does, selecting that row first so the menu names it.
 			if m.st.Session(cmd.To) != nil {
+				m.dialogOrigin = cmd.Origin
 				m.revealSession(cmd.To)
 				for i, r := range m.rows {
 					if r.kind == rowSession && r.id == cmd.To {
@@ -885,23 +895,28 @@ func (m *Model) drainCmds() {
 			}
 		case "archive", "stop":
 			if m.mode == modeNormal {
+				m.dialogOrigin = cmd.Origin
 				m.requestSessionAction(cmd.Op, []string{cmd.From})
 			}
 		case "act":
 			// A chord pressed while an agent had the keyboard. Act on the
-			// ACTIVE session — the one on screen — by selecting its row first,
-			// then running the exact handler the sidebar runs. Prompts,
-			// pickers and confirms pull focus to the sidebar, or they would
-			// be questions nobody can answer.
+			// session on screen when the key was pressed, then run the same
+			// handler as the sidebar. Keep the origin for centered dialogs.
 			if m.mode != modeNormal {
 				continue // a popup is already up; don't stack surprises under it
 			}
 			key := tmuxctl.ActKey(cmd.To)
-			if m.activeID != "" {
-				m.revealSession(m.activeID)
+			m.dialogOrigin = cmd.Origin
+			target := state.SessionIDFromTmux(cmd.Origin.Session)
+			if target != "" && m.st.Session(target) == nil {
+				m.flash("the source session is no longer on the desk", false)
+				continue
 			}
-			if actNeedsSidebar[key] && m.sidebarPane != "" {
-				_ = tmuxctl.SelectPane(m.sidebarPane)
+			if target == "" {
+				target = m.activeID
+			}
+			if m.st.Session(target) != nil {
+				m.revealSession(target)
 			}
 			if _, c := m.keyNormalStr(key); c != nil {
 				m.pending = append(m.pending, c)
@@ -1527,11 +1542,28 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.importSel, m.importTop = 0, 0
 		return m, nil
 
+	case dialogResult:
+		return m.finishPaneDialog(msg)
+
 	case tea.MouseMsg:
-		return m.updateMouse(msg)
+		if m.dialogActive {
+			return m, nil
+		}
+		if m.mode == modeNormal {
+			m.dialogOrigin = tmuxctl.PopupOrigin{}
+		}
+		model, cmd := m.updateMouse(msg)
+		return model, m.withPending(cmd)
 
 	case tea.KeyMsg:
-		return m.updateKey(msg)
+		if m.dialogActive {
+			return m, nil
+		}
+		if m.mode == modeNormal {
+			m.dialogOrigin = tmuxctl.PopupOrigin{}
+		}
+		model, cmd := m.updateKey(msg)
+		return model, m.withPending(cmd)
 	}
 	return m, nil
 }
@@ -1972,6 +2004,9 @@ func (m *Model) openInfo(id string) {
 	m.infoGit = gitInfo(s.Dir)
 	m.scroll = 0
 	m.mode = modeInfo
+	if !m.startPaneDialog(m.infoLines(64), false) {
+		m.focusSidebar()
+	}
 }
 
 // gitInfo returns "branch" or "branch*" (dirty) for a directory, "" if it
@@ -2003,9 +2038,11 @@ func (m *Model) keyNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // inside an agent (via the tmux root bindings) runs the same handler a
 // sidebar keystroke does.
 func (m *Model) keyNormalStr(key string) (tea.Model, tea.Cmd) {
-	if actNeedsSidebar[key] {
-		m.focusSidebar()
-	}
+	defer func() {
+		if actNeedsSidebar[key] && !m.dialogActive {
+			m.focusSidebar()
+		}
+	}()
 	switch key {
 	case "ctrl+c": // the escape hatch stays instant
 		if m.dirty {
@@ -2303,6 +2340,9 @@ func (m *Model) keyNormalStr(key string) (tea.Model, tea.Cmd) {
 	case "alt+?":
 		m.scroll = 0
 		m.mode = modeHelp
+		if !m.startPaneDialog(m.helpLines(), false) {
+			m.focusSidebar()
+		}
 
 	default:
 		// A bare printable key does NOTHING here by design: this is the pane
@@ -2364,11 +2404,13 @@ func (m *Model) startInput(mo mode, prompt, initial string) {
 }
 
 func (m *Model) confirm(msgText string, fn func() tea.Cmd) {
-	m.focusSidebar()
 	m.scroll = 0
 	m.mode = modeConfirm
 	m.confirmMsg = msgText
 	m.confirmFn = fn
+	if !m.startPaneDialog(m.confirmLines(), true) {
+		m.focusSidebar()
+	}
 }
 
 func (m *Model) keyConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {

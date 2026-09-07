@@ -174,7 +174,11 @@ func (m *Model) View() string {
 		return "Resize pane: at least 16 columns × 10 rows"
 	}
 	var body string
-	switch m.mode {
+	viewMode := m.mode
+	if m.dialogActive {
+		viewMode = modeNormal
+	}
+	switch viewMode {
 	case modeHelp:
 		body = m.overlay(m.viewHelp())
 	case modeInfo:
@@ -633,11 +637,15 @@ func shortDir(dir string) string {
 // line away from where you are looking — which for "remove from desk" is the wrong
 // place to be subtle.
 func (m *Model) viewConfirm() string {
+	return m.scrollBox(m.confirmLines(), dialogHint(true))
+}
+
+func (m *Model) confirmLines() []string {
 	lines := strings.Split(m.confirmMsg, "\n")
 	if len(lines) > 0 {
 		lines[0] = stText.Bold(true).Render(lines[0])
 	}
-	return m.scrollBox(lines, "y confirm · n / Esc cancel")
+	return lines
 }
 
 func (m *Model) viewGroupPick() string {
@@ -683,11 +691,15 @@ func (m *Model) viewGroupPick() string {
 }
 
 func (m *Model) viewInfo() string {
+	return m.scrollBox(m.infoLines(m.width), "↑↓ scroll · Esc close")
+}
+
+func (m *Model) infoLines(width int) []string {
 	s := m.st.Session(m.infoTarget)
 	if s == nil {
-		return ""
+		return nil
 	}
-	vw := m.width - 6
+	vw := width - 6
 	if vw > 56 {
 		vw = 56
 	}
@@ -797,7 +809,7 @@ func (m *Model) viewInfo() string {
 	for i := range flat {
 		flat[i] = pad(flat[i], vw)
 	}
-	return m.scrollBox(flat, "↑↓ scroll · Esc close")
+	return flat
 }
 
 // viewHelp is a full-body page (not a floating box) so it always fits the
