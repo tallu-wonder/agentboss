@@ -92,12 +92,11 @@ func (m *Model) listInnerHeight() int { return max(0, m.height-4) } // header, r
 
 // Widths of the compact metric columns, measured in terminal cells.
 const (
-	costW    = 6
+	costW    = 5
 	modelW   = 7
 	tokenW   = 4
 	ageW     = 3
-	contextW = 6
-	statusW  = 9 // "needs you"; shorter states must not shift numeric columns
+	contextW = 4
 	projectW = 18
 )
 
@@ -154,15 +153,15 @@ func agoLong(t time.Time) string {
 func (m *Model) statusGlyph(k status.Kind) (string, lipgloss.Style) {
 	switch k {
 	case status.Working:
-		return spinnerFrames[m.spin%len(spinnerFrames)], stWorking
+		return "▶", stWorking
 	case status.NeedsYou:
 		return "◆", stAlert
 	case status.Attention:
 		return "●", stNew
 	case status.Idle:
-		return "·", stIdle
+		return "⏸", stIdle
 	default:
-		return "○", stDormant
+		return "■", stDormant
 	}
 }
 
@@ -444,13 +443,12 @@ func (m *Model) renderSessionRow(id string, num, w int) string {
 	if num > 0 {
 		number = stDim.Render(fmt.Sprintf("%d ", num))
 	}
-	left := cursor + active + mark + number + style.Render(icon) + " "
+	left := cursor + active + mark + number
 	if g := m.st.Group(s.GroupID); g != nil {
-		left = cursor + active + lipgloss.NewStyle().Foreground(groupLip(g.Color)).Render("│") + mark + number + style.Render(icon) + " "
+		left = cursor + active + lipgloss.NewStyle().Foreground(groupLip(g.Color)).Render("│") + mark + number
 	}
-	label := map[status.Kind]string{status.Working: "working", status.NeedsYou: "needs you", status.Attention: "new", status.Idle: "idle", status.Dormant: "stopped"}[k]
-	right := style.Render(label)
-	if m.st.ShowMetrics && w >= 65 {
+	right := style.Render(icon)
+	if m.st.ShowMetrics && w >= 46 {
 		// Reserve the same cells on every row, including missing/unpriced
 		// values, so numbers stay aligned across agents and status changes.
 		model := familyStyle(m.familyOf(id)).Render(pad(m.familyOf(id), modelW))
@@ -459,7 +457,7 @@ func (m *Model) renderSessionRow(id string, num, w int) string {
 		if value := m.costOf(id); value >= .01 {
 			cost = stText.Render(padNum(fmtUSD(value), costW))
 		}
-		right = model + " " + context + " " + cost + "  " + style.Render(pad(label, statusW))
+		right = model + " " + context + " " + cost + " " + right
 	}
 	if w >= 90 {
 		right = stDim.Render(pad(shortProject(s.Dir), projectW)) + " · " + right
@@ -514,9 +512,13 @@ func modelWindow(family string) int {
 // "$128").
 func fmtUSD(v float64) string {
 	switch {
-	case v >= 100:
+	case v >= 9_999.5:
+		// The same compact k/M notation as token counts keeps large totals
+		// within five cells, including the dollar sign.
+		return "$" + fmtTokens(int(v))
+	case v >= 99.95:
 		return fmt.Sprintf("$%.0f", v)
-	case v >= 10:
+	case v >= 9.995:
 		return fmt.Sprintf("$%.1f", v)
 	default:
 		return fmt.Sprintf("$%.2f", v)
@@ -741,13 +743,13 @@ func (m *Model) viewInfo() string {
 	if info.ContextTokens > 0 {
 		window := m.contextWindowOf(s.ID)
 		pct := info.ContextTokens * 100 / window
-		approx := ""
+		description := "size right now"
 		if s.AgentOf() == state.AgentClaude {
-			approx = "~"
+			description = "estimated current size"
 		}
 		lines = append(lines, row("context",
 			tokenStyle(info.ContextTokens, window).Render(fmtTokens(info.ContextTokens))+
-				stDim.Render(fmt.Sprintf(" · %s%d%% of %s · size right now", approx, pct, fmtTokens(window)))))
+				stDim.Render(fmt.Sprintf(" · %d%% of %s · %s", pct, fmtTokens(window), description))))
 	}
 	if c := m.costOf(s.ID); c >= 0.01 {
 		// Say which window this covers. Claude's own /usage reports only the

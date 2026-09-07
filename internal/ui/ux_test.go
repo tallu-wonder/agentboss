@@ -265,22 +265,22 @@ func TestNamesUseEmptyMetricSpaceAndTabNumbersStayStable(t *testing.T) {
 }
 
 func TestRowMetricsStayAligned(t *testing.T) {
-	for _, width := range []int{65, 67, 100} {
+	for _, width := range []int{46, 52, 65, 67, 100} {
 		t.Run(fmt.Sprint(width), func(t *testing.T) {
 			m := uxModel(t)
 			m.st.ShowMetrics = true
 			cases := []struct {
-				family, agent, context, cost string
-				tokens                       int
-				total                        float64
-				kind                         status.Kind
+				family, agent, context, cost, icon string
+				tokens                             int
+				total                              float64
+				kind                               status.Kind
 			}{
-				{"opus", state.AgentClaude, "~9%", "$0.42", 90_000, .42, status.Working},
-				{"sonnet", state.AgentClaude, "~70%", "$12.3", 700_000, 12.3, status.NeedsYou},
-				{"haiku", state.AgentClaude, "~100%", "$128", 1_000_000, 128, status.Attention},
-				{"gpt-5.6", state.AgentCodex, "85%", "", 850_000, 0, status.Idle},
-				{"opus", state.AgentClaude, "~90%", "$99999", 900_000, 99999, status.Dormant},
-				{"", state.AgentClaude, "", "", 0, 0, status.Idle},
+				{"opus", state.AgentClaude, "9%", "$0.42", "▶", 90_000, .42, status.Working},
+				{"sonnet", state.AgentClaude, "70%", "$12.3", "◆", 700_000, 12.3, status.NeedsYou},
+				{"haiku", state.AgentClaude, "100%", "$128", "●", 1_000_000, 128, status.Attention},
+				{"gpt-5.6", state.AgentCodex, "85%", "", "⏸", 850_000, 0, status.Idle},
+				{"opus", state.AgentClaude, "90%", "$100k", "■", 900_000, 99999, status.Dormant},
+				{"", state.AgentClaude, "", "", "⏸", 0, 0, status.Idle},
 			}
 			modelStart, contextEnd, costEnd := -1, -1, -1
 			for i, tc := range cases {
@@ -302,8 +302,13 @@ func TestRowMetricsStayAligned(t *testing.T) {
 				if got := ansi.StringWidth(line); got != width {
 					t.Fatalf("%s: row width = %d, want %d: %q", tc.kind, got, width, line)
 				}
-				if strings.Contains(line, "ctx ") || strings.Contains(line, "est ") {
-					t.Fatalf("redundant row labels: %q", line)
+				for _, removed := range []string{"ctx ", "est ", "~", "working", "needs you", "new", "idle", "stopped"} {
+					if strings.Contains(line, removed) {
+						t.Fatalf("redundant row text %q: %q", removed, line)
+					}
+				}
+				if !strings.HasSuffix(line, tc.icon) || strings.Count(line, tc.icon) != 1 || ansi.StringWidth(tc.icon) != 1 {
+					t.Fatalf("expected a single status icon in the last cell: %q", line)
 				}
 				if tc.family != "" {
 					at := strings.Index(line, tc.family)

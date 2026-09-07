@@ -177,7 +177,7 @@ func TestColumnFormattersFitTheirColumns(t *testing.T) {
 			t.Errorf("fmtTokens(%d) = %q, %d cells > column %d", n, got, ansiWidth(got), tokenW)
 		}
 	}
-	for _, v := range []float64{0.01, 5.85, 29.7, 99.99, 108, 737, 1600, 99999} {
+	for _, v := range []float64{0.01, 5.85, 9.995, 9.999, 29.7, 99.95, 99.99, 108, 737, 1600, 9999.5, 9999.99, 10_000, 99999, 1_000_000, 13_400_000} {
 		if got := fmtUSD(v); ansiWidth(got) > costW {
 			t.Errorf("fmtUSD(%v) = %q, %d cells > column %d", v, got, ansiWidth(got), costW)
 		}

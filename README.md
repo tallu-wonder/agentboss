@@ -58,8 +58,8 @@ On macOS, `brew install terminal-notifier` makes notifications clickable.
 ## A tour
 
 Press `opt+n`, pick a folder, pick an agent — that's a session. It gets a tab, a row,
-and a status glyph that tracks it: `⠴ working`, `◆ needs you`, `● finished since
-you looked`, `· idle`, `○ dormant`. Group it, drag it, rename it. Walk away and
+and a status icon at the right of its row: `▶ working`, `◆ needs you`, `● finished
+since you looked`, `⏸ idle`, `■ stopped`. Group it, drag it, rename it. Walk away and
 the agents keep going.
 
 <table>
@@ -191,7 +191,9 @@ only the agents that were previously running.
 
 The sidebar reserves space for session names and statuses. The selected session's
 project, branch, agent, context percentage and estimated conversation cost appear
-below the list. `opt+t` adds aligned model, context and cost columns to wide rows.
+below the list. `opt+t` adds compact, aligned model, context and cost columns in
+sidebars at least 46 columns wide. Percentages omit the tilde; Claude context is
+still an estimate, explained in session info. Large costs use `k`/`M` suffixes.
 Models retain their colors; context turns yellow at 60% and red at 85% utilization.
 The persistent **Typing** line identifies the pane receiving input; `›` marks the
 selected row, `▎` the displayed session, and `✓` selected batch entries.

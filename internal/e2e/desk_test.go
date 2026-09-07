@@ -196,7 +196,14 @@ func TestBlockingRequestSurvivesViewing(t *testing.T) {
 	d.newSession("other")
 	d.keys("C-\\")
 	d.hook(blocked, `{"hook_event_name":"Notification","message":"needs permission to use Bash"}`)
-	d.waitFor("blocked status", func() bool { return strings.Contains(d.sidebar(), "needs you") })
+	d.waitFor("blocked status icon", func() bool {
+		for _, line := range strings.Split(d.sidebar(), "\n") {
+			if strings.Contains(line, "blocked") && strings.HasSuffix(strings.TrimSpace(line), "◆") {
+				return true
+			}
+		}
+		return false
+	})
 	d.keys("M-a")
 	d.waitFor("the request to be seen", func() bool {
 		data, _ := os.ReadFile(filepath.Join(d.home, "state.json"))

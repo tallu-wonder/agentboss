@@ -149,11 +149,7 @@ func (m *Model) contextValue(id string) string {
 	if window <= 0 {
 		return fmtTokens(tokens)
 	}
-	prefix := ""
-	if s := m.st.Session(id); s != nil && s.AgentOf() == "claude" {
-		prefix = "~"
-	}
-	return fmt.Sprintf("%s%d%%", prefix, tokens*100/window)
+	return fmt.Sprintf("%d%%", tokens*100/window)
 }
 
 func (m *Model) selectedDetails() []string {
@@ -214,7 +210,7 @@ func (m *Model) helpLines() []string {
 	for _, r := range rows {
 		lines = append(lines, stText.Bold(true).Render(r[0])+"  "+r[1])
 	}
-	lines = append(lines, "", "Mouse: right-click for actions; middle-click asks to stop.", "", "◆ needs you: blocked until the agent resumes", "● new: finished since you last looked", "⠙ working · · idle · ○ stopped / resumable", "", "Search: agent:codex project:payments status:blocked", "Select: "+modKey("b")+" toggles; "+modKey("B")+" selects visible.", "Selected sessions stay selected across filters; Esc clears selection first.", "Move or archive applies to all selected sessions.", "", "Bare letters never act outside a dialog.", "Option must send Alt: Ghostty macos-option-as-alt = true; iTerm2 Option = Esc+.", "tmux prefix: Ctrl+Q")
+	lines = append(lines, "", "Mouse: right-click for actions; middle-click asks to stop.", "", "◆ needs you: blocked until the agent resumes", "● new: finished since you last looked", "▶ working · ⏸ idle · ■ stopped / resumable", "", "Search: agent:codex project:payments status:blocked", "Select: "+modKey("b")+" toggles; "+modKey("B")+" selects visible.", "Selected sessions stay selected across filters; Esc clears selection first.", "Move or archive applies to all selected sessions.", "", "Bare letters never act outside a dialog.", "Option must send Alt: Ghostty macos-option-as-alt = true; iTerm2 Option = Esc+.", "tmux prefix: Ctrl+Q")
 	return lines
 }
 
