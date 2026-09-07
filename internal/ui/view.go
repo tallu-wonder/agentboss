@@ -637,7 +637,8 @@ func shortDir(dir string) string {
 // line away from where you are looking — which for "remove from desk" is the wrong
 // place to be subtle.
 func (m *Model) viewConfirm() string {
-	return m.scrollBox(m.confirmLines(), dialogHint(true))
+	box, _ := renderDialogBox(m.confirmLines(), true, m.width, m.listInnerHeight(), &m.scroll)
+	return box
 }
 
 func (m *Model) confirmLines() []string {

@@ -1583,6 +1583,11 @@ func (m *Model) updateMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	case modeImport:
 		return m.mouseImport(msg)
 	case modeHelp, modeInfo, modeConfirm:
+		if m.mode == modeConfirm {
+			if key := m.confirmClick(msg); key != "" {
+				return m.keyConfirm(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)})
+			}
+		}
 		if msg.Action == tea.MouseActionPress {
 			if msg.Button == tea.MouseButtonWheelDown {
 				m.scroll += 3

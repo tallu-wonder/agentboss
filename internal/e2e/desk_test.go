@@ -19,6 +19,7 @@ package e2e
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -150,6 +151,23 @@ func (d *desk) sidebar() string {
 	return out
 }
 
+// clickButton sends the same press/release reports as a terminal. For a popup,
+// target is the holder client, so tmux must translate screen coordinates too.
+func (d *desk) clickButton(target, screen, label string) {
+	d.t.Helper()
+	for y, line := range strings.Split(screen, "\n") {
+		if at := strings.Index(line, "[ "+label+" ]"); at >= 0 {
+			x := ansi.StringWidth(line[:at]) + 3
+			seq := fmt.Sprintf("\x1b[<0;%d;%dM\x1b[<0;%d;%dm", x+1, y+1, x+1, y+1)
+			if _, err := d.tmux("send-keys", "-t", target, "-l", seq); err != nil {
+				d.t.Fatal(err)
+			}
+			return
+		}
+	}
+	d.t.Fatalf("missing %s button:\n%s", label, screen)
+}
+
 // tabs is the tab bar as tmux stores it, styling stripped.
 func (d *desk) tabs() string {
 	out, _ := d.tmux("show-options", "-t", "=agentboss:", "-v", "status-format[0]")
@@ -272,11 +290,14 @@ func TestBatchActionsAndMouseStopConfirmation(t *testing.T) {
 	})
 	d.keys("M-B", "M-x")
 	d.waitFor("batch confirmation", func() bool { return strings.Contains(d.sidebar(), "Archive 2 sessions?") })
-	d.keys("n")
+	d.clickButton("agentboss:0.0", d.sidebar(), "No")
+	d.waitFor("No to cancel the batch", func() bool { return !strings.Contains(d.sidebar(), "Archive 2 sessions?") })
 	if len(d.liveSessions()) != 2 {
 		t.Fatal("canceling stopped an agent")
 	}
-	d.keys("M-x", "y")
+	d.keys("M-x")
+	d.waitFor("another batch confirmation", func() bool { return strings.Contains(d.sidebar(), "Archive 2 sessions?") })
+	d.clickButton("agentboss:0.0", d.sidebar(), "Yes")
 	d.waitFor("batch archive", func() bool {
 		if len(d.liveSessions()) != 0 {
 			return false
@@ -930,9 +951,16 @@ func TestActionChordsWorkFromInsideAnAgent(t *testing.T) {
 		t.Fatal(err)
 	}
 	d.waitFor("another confirmation", func() bool { return strings.Contains(holder(), "Stop session?") })
-	if _, err := d.tmux("send-keys", "-t", "holder", "y"); err != nil {
+	d.clickButton("holder", holder(), "No")
+	d.waitFor("No to cancel the popup", func() bool { return !strings.Contains(holder(), "Stop session?") })
+	if len(d.liveSessions()) != 2 {
+		t.Fatal("clicking No stopped an agent")
+	}
+	if _, err := d.tmux("send-keys", "-t", "holder", "-H", "1b", "7a"); err != nil {
 		t.Fatal(err)
 	}
+	d.waitFor("confirmation to click Yes", func() bool { return strings.Contains(holder(), "Stop session?") })
+	d.clickButton("holder", holder(), "Yes")
 	d.waitFor("the active session's tab to close", func() bool {
 		for _, s := range d.liveSessions() {
 			if s == closeMe {

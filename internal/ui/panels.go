@@ -31,12 +31,26 @@ func (m *Model) scrollBox(lines []string, hint string) string {
 }
 
 func renderScrollBox(lines []string, hint string, width, height int, scroll *int) string {
+	box, _ := renderScrollBoxFooter(lines, scrollBoxHint(hint, max(8, width-6)), width, height, scroll)
+	return box
+}
+
+func scrollBoxHint(hint string, width int) []string {
+	lines := strings.Split(ansi.Wrap(hint, width, ""), "\n")
+	for i := range lines {
+		lines[i] = stDim.Render(lines[i])
+	}
+	return lines
+}
+
+// renderScrollBoxFooter returns the footer's first row inside the rendered box,
+// so clickable controls use the same layout as the text on screen.
+func renderScrollBoxFooter(lines, foot []string, width, height int, scroll *int) (string, int) {
 	w := max(8, width-6)
 	var content []string
 	for _, line := range lines {
 		content = append(content, strings.Split(ansi.Wrap(line, w, ""), "\n")...)
 	}
-	foot := strings.Split(ansi.Wrap(hint, w, ""), "\n")
 	visible := max(1, height-len(foot)-3)
 	*scroll = max(0, min(*scroll, max(0, len(content)-visible)))
 	end := min(len(content), *scroll+visible)
@@ -46,13 +60,12 @@ func renderScrollBox(lines []string, hint string, width, height int, scroll *int
 	} else {
 		shown = append(shown, "")
 	}
-	for _, f := range foot {
-		shown = append(shown, stDim.Render(f))
-	}
+	footY := stOverlay.GetBorderTopSize() + stOverlay.GetPaddingTop() + len(shown)
+	shown = append(shown, foot...)
 	for i := range shown {
 		shown[i] = pad(shown[i], w)
 	}
-	return stOverlay.Render(strings.Join(shown, "\n"))
+	return stOverlay.Render(strings.Join(shown, "\n")), footY
 }
 
 func (m *Model) keyScroll(msg tea.KeyMsg) (tea.Model, tea.Cmd) {

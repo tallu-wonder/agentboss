@@ -75,7 +75,7 @@ func TestPaneDialogScrollKeepsAnswerKeysVisible(t *testing.T) {
 	for _, size := range [][2]int{{24, 8}, {64, 20}} {
 		m := &paneDialog{width: size[0], height: size[1], request: dialogRequest{Confirm: true}}
 		for i := 0; i < 100; i++ {
-			m.request.Lines = append(m.request.Lines, fmt.Sprintf("session %03d with a long descriptive name", i))
+			m.request.Lines = append(m.request.Lines, fmt.Sprintf("session with a long descriptive name %03d", i))
 		}
 		m.Update(tea.KeyMsg{Type: tea.KeyEnd})
 		view := m.View()
@@ -91,6 +91,91 @@ func TestPaneDialogScrollKeepsAnswerKeysVisible(t *testing.T) {
 			if ansi.StringWidth(line) > size[0] {
 				t.Fatalf("dialog overflows width at %v: %q", size, line)
 			}
+		}
+	}
+}
+
+// Locate the visible label, independently of the layout's hit regions.
+func confirmationButtonCells(t *testing.T, view, label string) (int, int, int) {
+	t.Helper()
+	lines := strings.Split(ansi.Strip(view), "\n")
+	for y := len(lines) - 1; y >= 0; y-- {
+		for _, text := range []string{"[ " + label + " ]", "[" + label + "]"} {
+			if x := strings.Index(lines[y], text); x >= 0 {
+				return ansi.StringWidth(lines[y][:x]), y, len(text)
+			}
+		}
+	}
+	t.Fatalf("missing %s button:\n%s", label, view)
+	return 0, 0, 0
+}
+
+func TestPaneConfirmationMouseButtons(t *testing.T) {
+	for _, size := range [][2]int{{16, 6}, {24, 8}, {64, 20}, {65, 21}} {
+		for _, label := range []string{"Yes", "No"} {
+			t.Run(fmt.Sprint(size)+label, func(t *testing.T) {
+				m := &paneDialog{width: 64, height: 20, request: dialogRequest{Confirm: true,
+					Lines: []string{strings.Repeat("A long message to review. ", 100)}}}
+				m.View()
+				m.Update(tea.WindowSizeMsg{Width: size[0], Height: size[1]})
+				m.Update(tea.KeyMsg{Type: tea.KeyEnd})
+				view := m.View()
+				if len(strings.Split(view, "\n")) > size[1] {
+					t.Fatal("buttons overflow the dialog height")
+				}
+				x, y, width := confirmationButtonCells(t, view, label)
+				for _, msg := range []tea.MouseMsg{
+					{X: x - 1, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress},
+					{X: x + width, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress},
+					{X: x, Y: y - 1, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress},
+					{X: x, Y: y, Button: tea.MouseButtonRight, Action: tea.MouseActionPress},
+					{X: x, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionMotion},
+					{X: x, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionRelease},
+					{X: x, Y: y, Button: tea.MouseButtonWheelDown, Action: tea.MouseActionPress},
+				} {
+					if _, cmd := m.Update(msg); cmd != nil || m.approved {
+						t.Fatalf("non-click answered the dialog: %+v", msg)
+					}
+				}
+				for _, offset := range []int{0, width / 2, width - 1} {
+					copy := *m
+					_, cmd := copy.Update(tea.MouseMsg{X: x + offset, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+					if cmd == nil || copy.approved != (label == "Yes") {
+						t.Fatalf("click on %s at offset %d did not answer correctly", label, offset)
+					}
+					if _, ok := cmd().(tea.QuitMsg); !ok {
+						t.Fatal("click did not dismiss the popup")
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestSidebarConfirmationMouseButtons(t *testing.T) {
+	for _, size := range [][2]int{{16, 10}, {24, 12}, {46, 24}, {65, 25}} {
+		for _, label := range []string{"Yes", "No"} {
+			t.Run(fmt.Sprint(size)+label, func(t *testing.T) {
+				m := uxModel(t)
+				called := 0
+				m.confirm(strings.Repeat("A long confirmation. ", 100), func() tea.Cmd { called++; return nil })
+				m.View()
+				m.width, m.height, m.scroll = size[0], size[1], 1<<20
+				x, y, width := confirmationButtonCells(t, m.View(), label)
+				m.Update(tea.MouseMsg{X: x, Y: y - 1, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+				if m.mode != modeConfirm || called != 0 {
+					t.Fatal("click outside the buttons answered the confirmation")
+				}
+				m.Update(tea.MouseMsg{X: x + width/2, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+				m.Update(tea.MouseMsg{X: x + width/2, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionRelease})
+				want := 0
+				if label == "Yes" {
+					want = 1
+				}
+				if m.mode != modeNormal || m.confirmFn != nil || called != want {
+					t.Fatalf("%s click: mode=%v, callback ran %d times", label, m.mode, called)
+				}
+			})
 		}
 	}
 }

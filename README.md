@@ -205,8 +205,9 @@ and persistent validation. Arrow keys choose a folder. Shift+Tab goes back from 
 worktree name; Left or Shift+Tab goes back from agent selection. A worktree is
 created only when the agent choice is submitted. Help, session info and long
 confirmations scroll with arrows/Page Up/Page Down and close with Escape.
-Confirmations require `y`; Enter never approves them. A pane too small to host a
-dialog uses the sidebar. Long form errors scroll with Alt+Up/Down.
+Confirmations have clickable **Yes** and **No** buttons; `y` confirms and `n` or
+Escape cancels. Enter never approves them. A pane too small to host a dialog uses
+the sidebar. Long form errors scroll with Alt+Up/Down.
 
 ## How it works
 
