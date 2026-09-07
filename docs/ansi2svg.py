@@ -6,15 +6,15 @@ real tmux client, rather than a mock-up. Each styled run becomes one <tspan>
 pinned to its column with textLength, so glyph-width differences between the
 viewer's monospace font and the capture never accumulate into drift.
 """
+import argparse
 import re
-import sys
 import unicodedata
 from html import escape
 
-CELL_W = 8.4
-CELL_H = 18.0
-PAD = 20.0
-FONT_SIZE = 14.0
+CELL_W = 10.8
+CELL_H = 24.0
+PAD = 24.0
+FONT_SIZE = 18.0
 
 # xterm 256-colour palette, and a background tuned to read well on GitHub in
 # both light and dark page themes.
@@ -153,10 +153,39 @@ def parse(lines):
         yield runs
 
 
-def render(lines, title):
+def crop_row(runs, left, width):
+    """Crop in terminal cells, retaining each run's colour and alignment."""
+    right = left + width
+    cropped = []
+    for col, text, style in runs:
+        start, chars = None, []
+        for char in text:
+            cells = cell_width(char)
+            if cells == 0:
+                if chars:
+                    chars.append(char)
+                continue
+            end = col + cells
+            lo, hi = max(col, left), min(end, right)
+            if hi > lo:
+                if start is None:
+                    start = lo - left
+                chars.append(char if lo == col and hi == end else " " * (hi - lo))
+            col = end
+        if chars:
+            cropped.append((start, "".join(chars), style))
+    return cropped
+
+
+def render(lines, title, crop=None):
     parsed = list(parse(lines))
-    cols = max((sum(text_width(t) for _, t, _ in runs) for runs in parsed), default=80)
-    cols = max(cols, 80)
+    if crop:
+        left, top, cols, rows = crop
+        parsed = [crop_row(runs, left, cols) for runs in parsed[top:top + rows]]
+        parsed += [[] for _ in range(rows - len(parsed))]
+    else:
+        cols = max((sum(text_width(t) for _, t, _ in runs) for runs in parsed), default=80)
+        cols = max(cols, 80)
     w = cols * CELL_W + PAD * 2
     h = len(parsed) * CELL_H + PAD * 2 + 34  # room for the window chrome
 
@@ -212,12 +241,20 @@ def render(lines, title):
 
 
 if __name__ == "__main__":
-    src, dst = sys.argv[1], sys.argv[2]
-    title = sys.argv[3] if len(sys.argv) > 3 else "agentboss"
-    with open(src, encoding="utf-8", errors="replace") as f:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("src", help="ANSI terminal capture")
+    parser.add_argument("dst", help="output SVG")
+    parser.add_argument("title", nargs="?", default="agentboss")
+    parser.add_argument("--crop", nargs=4, type=int, metavar=("LEFT", "TOP", "WIDTH", "HEIGHT"),
+                        help="crop to a pane in terminal cells (zero-based coordinates)")
+    args = parser.parse_args()
+    if args.crop and (min(args.crop[:2]) < 0 or min(args.crop[2:]) < 1):
+        parser.error("crop coordinates must be nonnegative and dimensions positive")
+    with open(args.src, encoding="utf-8", errors="replace") as f:
         lines = [l.rstrip("\n") for l in f]
     while lines and not lines[-1].strip():
         lines.pop()
-    with open(dst, "w", encoding="utf-8") as f:
-        f.write(render(lines, title))
-    print(f"  wrote {dst} ({len(lines)} rows)")
+    with open(args.dst, "w", encoding="utf-8") as f:
+        f.write(render(lines, args.title, args.crop))
+    rows = args.crop[3] if args.crop else len(lines)
+    print(f"  wrote {args.dst} ({rows} rows)")

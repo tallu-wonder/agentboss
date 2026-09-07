@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Rebuilds docs/desk.svg, docs/info.svg and docs/keys.svg from a LIVE demo
+# Rebuilds the README screenshots from a LIVE demo
 # desk: a sandboxed agentboss (private tmux server, stub agents, fabricated
 # transcripts) driven exactly like the real thing, captured with
 # `tmux capture-pane -e` and rendered by ansi2svg.py. Because the screenshots
@@ -7,7 +7,7 @@
 #
 #   ./docs/demo.sh
 #
-# Needs: go, tmux, python3. Touches nothing outside its /tmp sandbox.
+# Needs: go, tmux, python3. Only the generated docs/*.svg leave the /tmp sandbox.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -53,7 +53,7 @@ env -i PATH="$D/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin" \
   AGENTBOSS_CLAUDE_CMD="$D/bin/fakeagent" AGENTBOSS_CLAUDE_PROJECTS="$D/projects" \
   AGENTBOSS_CODEX_CMD="$D/bin/fakeagent" AGENTBOSS_CODEX_HOME="$D/codex" \
   AGENTBOSS_OPEN_CMD="$D/bin/open" \
-  tmux new-session -d -s agentboss -x 99 -y 36 "$D/agentboss __ui"
+  tmux new-session -d -s agentboss -x 132 -y 34 "$D/agentboss __ui"
 sleep 2
 
 T() { TMUX_TMPDIR="$D" tmux "$@"; }
@@ -122,33 +122,71 @@ hookev "$(id_of 'flaky login test')" '{"hook_event_name":"Notification","message
 hookev "$(id_of 'release notes')"    '{"hook_event_name":"Stop"}'
 sleep 4
 
-# Keys + info shots at full height, whole window (tab bar included) via a
-# nested holder client, with the sidebar holding focus.
+# Capture dialogs from the agent pane through a real attached client. The
+# close-ups retain that pane's focus border and the agent behind the dialog.
 SB=$(T list-panes -t agentboss: -F '#{pane_id} #{@agentboss_role}' | awk '$2=="sidebar"{print $1}')
-T select-pane -t "$SB"
-T new-session -d -s holder -x 99 -y 37 "TMUX= tmux attach-session -t agentboss"
+VP=$(T list-panes -t agentboss: -F '#{pane_id} #{@agentboss_role}' | awk '$2=="viewport"{print $1}')
+T resize-pane -t "$SB" -x 56
+keys M-t
+find_row "payments"; keys Enter
+T select-pane -t "$VP"
+T new-session -d -s holder -x 132 -y 35 "TMUX= tmux attach-session -t agentboss"
 sleep 2
 shot() {
   T capture-pane -p -e -J -t holder > "$D/$1.ansi"
   python3 docs/ansi2svg.py "$D/$1.ansi" "docs/$1.svg" agentboss
 }
-keys 'M-?'; sleep 0.6; shot keys; keys Escape; sleep 0.3
-find_row "payments"; keys M-v; sleep 0.7; shot info; keys Escape; sleep 0.3
+pane_shot() {
+  local pane_left pane_top pane_width pane_height
+  read -r pane_left pane_top pane_width pane_height <<< "$(T display-message -p -t "$VP" '#{pane_left} #{pane_top} #{pane_width} #{pane_height}')"
+  T capture-pane -p -e -J -t holder > "$D/$1.ansi"
+  # The top status row offsets pane_top by one; include the border just above
+  # the pane, which cancels that offset. Keep every content row below it.
+  python3 docs/ansi2svg.py "$D/$1.ansi" "docs/$1.svg" agentboss \
+    --crop "$pane_left" "$pane_top" "$pane_width" "$((pane_height+1))"
+}
+wait_dialog() {
+  local title="$1" attempt
+  for attempt in {1..100}; do
+    if [[ "$(T capture-pane -p -t holder)" == *"$title"* ]]; then sleep 0.3; return; fi
+    sleep 0.1
+  done
+  echo "dialog did not appear: $title" >&2
+  return 1
+}
+close_dialog() {
+  local attempt
+  T send-keys -t holder Escape
+  for attempt in {1..100}; do
+    if [[ "$(T show-options -w -v -t agentboss: @agentboss_dialog)" == "0" ]]; then return; fi
+    sleep 0.1
+  done
+  echo "dialog did not close" >&2
+  return 1
+}
+T send-keys -t holder -H 1b 76
+wait_dialog "process"; pane_shot info; close_dialog
+T send-keys -t holder -H 1b 3f
+wait_dialog "Keys and status"; pane_shot keys; close_dialog
+T send-keys -t holder -H 1b 7a
+wait_dialog "Stop session?"; pane_shot confirm; close_dialog
+
+# A taller overview keeps names, optional metrics and agent output readable.
+# Capture the same desk with each pane focused for a direct comparison.
+T kill-session -t holder
+T resize-window -t agentboss: -x 104 -y 32
+sleep 1
+T resize-pane -t "$SB" -x 52
+sleep 0.7
+hookev "$(id_of 'payments refactor')" '{"hook_event_name":"PreToolUse","tool_name":"Edit"}'
+T select-pane -t "$VP"
+T new-session -d -s holder -x 104 -y 33 "TMUX= tmux attach-session -t agentboss"
+sleep 2.5
+shot desk
+T select-pane -t "$SB"
+sleep 0.7
+shot sidebar
 keys M-p; sleep 0.4; shot commands; keys Escape
 keys M-A; sleep 0.4; shot attention; keys Escape
 
-# The hero is shorter. Resize first, then reopen the featured session so its
-# agent paints at the final size (a repaint after shrinking would otherwise
-# leave the top of the canned screen scrolled away).
-T kill-session -t holder
-T resize-window -t agentboss: -x 99 -y 24
-sleep 1
-find_row "payments"; keys M-z y; sleep 1     # close its tab...
-find_row "payments"; keys Enter; sleep 2   # ...and reopen at the final size
-hookev "$(id_of 'payments refactor')" '{"hook_event_name":"PreToolUse","tool_name":"Edit"}'
-T select-pane -t "$SB"
-T new-session -d -s holder -x 99 -y 25 "TMUX= tmux attach-session -t agentboss"
-sleep 2.5
-shot desk
-
-echo "wrote docs/desk.svg docs/info.svg docs/keys.svg docs/commands.svg docs/attention.svg"
+echo "wrote docs/{desk,sidebar,info,keys,confirm,commands,attention}.svg"

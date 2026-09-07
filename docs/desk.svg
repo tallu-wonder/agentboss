@@ -1,106 +1,126 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="872" height="524" viewBox="0 0 872 524" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,&quot;DejaVu Sans Mono&quot;,monospace" font-size="14.0">
+<svg xmlns="http://www.w3.org/2000/svg" width="1171" height="874" viewBox="0 0 1171 874" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,&quot;DejaVu Sans Mono&quot;,monospace" font-size="18.0">
 <title>agentboss</title>
-<rect width="872" height="524" rx="10" fill="#12141c"/>
-<g><circle cx="24" cy="20" r="5.5" fill="#ff5f57"/><circle cx="42" cy="20" r="5.5" fill="#febc2e"/><circle cx="60" cy="20" r="5.5" fill="#28c840"/><text x="436" y="25" fill="#6b7280" font-size="12" text-anchor="middle">agentboss</text></g>
-<rect x="20.0" y="54.0" width="33.6" height="18.0" fill="#262626"/>
-<rect x="53.6" y="54.0" width="8.4" height="18.0" fill="#005f87"/>
-<rect x="62.0" y="54.0" width="168.0" height="18.0" fill="#005f87"/>
-<rect x="230.0" y="54.0" width="8.4" height="18.0" fill="#262626"/>
-<rect x="238.4" y="54.0" width="8.4" height="18.0" fill="#303030"/>
-<rect x="246.8" y="54.0" width="159.6" height="18.0" fill="#303030"/>
-<rect x="406.4" y="54.0" width="8.4" height="18.0" fill="#262626"/>
-<rect x="414.8" y="54.0" width="8.4" height="18.0" fill="#303030"/>
-<rect x="423.2" y="54.0" width="134.4" height="18.0" fill="#303030"/>
-<rect x="557.6" y="54.0" width="8.4" height="18.0" fill="#262626"/>
-<rect x="566.0" y="54.0" width="8.4" height="18.0" fill="#303030"/>
-<rect x="574.4" y="54.0" width="16.8" height="18.0" fill="#303030"/>
-<rect x="591.2" y="54.0" width="75.6" height="18.0" fill="#303030"/>
-<rect x="666.8" y="54.0" width="184.8" height="18.0" fill="#262626"/>
-<rect x="20.0" y="144.0" width="8.4" height="18.0" fill="#3a3a3a"/>
-<text x="20.0" y="66.9" fill="#00afaf" textLength="33.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600"> ☰ </text>
-<text x="53.6" y="66.9" fill="#5fafff" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▎</text>
-<text x="62.0" y="66.9" fill="#e4e4e4" textLength="168.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600">⠇ payments refactor </text>
-<text x="238.4" y="66.9" fill="#5fafff" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▎</text>
-<text x="246.8" y="66.9" fill="#ff5f5f" textLength="159.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600">◆ flaky login test </text>
-<text x="414.8" y="66.9" fill="#87d787" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▎</text>
-<text x="423.2" y="66.9" fill="#ffd75f" textLength="134.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600">● release notes </text>
-<text x="566.0" y="66.9" fill="#87d787" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▎</text>
-<text x="574.4" y="66.9" fill="#808080" textLength="16.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">· </text>
-<text x="591.2" y="66.9" fill="#bcbcbc" textLength="75.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">PR sweep </text>
-<text x="20.0" y="84.9" fill="#00ffff" textLength="394.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600">──────────────────────────────────────────────┬</text>
-<text x="414.8" y="84.9" fill="#585858" textLength="436.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">────────────────────────────────────────────────────</text>
-<text x="28.4" y="102.9" fill="#42b3c2" textLength="75.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600">agentboss</text>
-<text x="104.0" y="102.9" fill="#87d787" textLength="25.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ⠙1</text>
-<text x="129.2" y="102.9" fill="#ff5f5f" textLength="25.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600"> ◆1</text>
-<text x="154.4" y="102.9" fill="#ffd75f" textLength="25.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ●1</text>
-<text x="305.6" y="102.9" fill="#9e9e9e" textLength="100.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">⌥p commands </text>
-<text x="406.4" y="102.9" fill="#00ffff" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600">│</text>
-<text x="20.0" y="120.9" fill="#808080" textLength="386.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">──────────────────────────────────────────────</text>
-<text x="406.4" y="120.9" fill="#00ffff" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600">│</text>
-<text x="423.2" y="120.9" fill="#d0d0d0" textLength="84.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">● Reading </text>
-<text x="507.2" y="120.9" fill="#d0d0d0" textLength="151.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600">payments/charge.ts</text>
-<text x="20.0" y="138.9" fill="#5fafff" textLength="25.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ▾ </text>
-<text x="45.2" y="138.9" fill="#5fafff" textLength="67.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600">shipping</text>
-<text x="112.4" y="138.9" fill="#9e9e9e" textLength="16.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 2</text>
-<text x="406.4" y="138.9" fill="#00ffff" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600">│</text>
-<text x="440.0" y="138.9" fill="#6c6c6c" textLength="268.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">⎿  Read 214 lines · 3 call sites</text>
-<text x="20.0" y="156.9" fill="#42b3c2" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600">›</text>
-<text x="28.4" y="156.9" fill="#42b3c2" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600">▎</text>
-<text x="36.8" y="156.9" fill="#5fafff" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="45.2" y="156.9" fill="#9e9e9e" textLength="16.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">1 </text>
-<text x="62.0" y="156.9" fill="#d0d0d0" textLength="142.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">payments refactor</text>
-<text x="381.2" y="156.9" fill="#87d787" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▶</text>
-<text x="406.4" y="156.9" fill="#00ffff" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600">│</text>
-<text x="36.8" y="174.9" fill="#5fafff" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="45.2" y="174.9" fill="#9e9e9e" textLength="16.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">2 </text>
-<text x="62.0" y="174.9" fill="#ff5f5f" textLength="310.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600">flaky login test                     </text>
-<text x="381.2" y="174.9" fill="#ff5f5f" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600">◆</text>
-<text x="406.4" y="174.9" fill="#00ffff" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600">│</text>
-<text x="423.2" y="174.9" fill="#d0d0d0" textLength="92.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">● The bug: </text>
-<text x="515.6" y="174.9" fill="#ffd75f" textLength="58.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">retry()</text>
-<text x="574.4" y="174.9" fill="#d0d0d0" textLength="84.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> drops the</text>
-<text x="20.0" y="192.9" fill="#87d787" textLength="25.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ▾ </text>
-<text x="45.2" y="192.9" fill="#87d787" textLength="58.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600">reviews</text>
-<text x="104.0" y="192.9" fill="#9e9e9e" textLength="16.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 2</text>
-<text x="406.4" y="192.9" fill="#00ffff" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600">│</text>
-<text x="414.8" y="192.9" fill="#d0d0d0" textLength="344.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">   idempotency key on its second attempt,</text>
-<text x="36.8" y="210.9" fill="#87d787" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="45.2" y="210.9" fill="#9e9e9e" textLength="16.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">3 </text>
-<text x="62.0" y="210.9" fill="#ffd75f" textLength="109.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve">release notes</text>
-<text x="381.2" y="210.9" fill="#ffd75f" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">●</text>
-<text x="406.4" y="210.9" fill="#00ffff" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600">│</text>
-<text x="414.8" y="210.9" fill="#d0d0d0" textLength="344.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">   so a gateway timeout can charge twice.</text>
-<text x="36.8" y="228.9" fill="#87d787" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="45.2" y="228.9" fill="#9e9e9e" textLength="16.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">4 </text>
-<text x="62.0" y="228.9" fill="#d0d0d0" textLength="67.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve">PR sweep</text>
-<text x="381.2" y="228.9" fill="#ffaf5f" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">⏸</text>
-<text x="406.4" y="228.9" fill="#00ffff" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600">│</text>
-<text x="414.8" y="228.9" fill="#d0d0d0" textLength="134.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">   Two ways out:</text>
-<text x="20.0" y="246.9" fill="#808080" textLength="109.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ▸ Archived 1</text>
-<text x="406.4" y="246.9" fill="#00ffff" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600">│</text>
-<text x="406.4" y="264.9" fill="#00ffff" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600">│</text>
-<text x="440.0" y="264.9" fill="#d0d0d0" textLength="176.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">1. Thread it through </text>
-<text x="616.4" y="264.9" fill="#87d7ff" textLength="100.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">RetryContext</text>
-<text x="406.4" y="282.9" fill="#00ffff" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600">│</text>
-<text x="440.0" y="282.9" fill="#d0d0d0" textLength="201.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">2. Pin it in the closure</text>
-<text x="406.4" y="300.9" fill="#585858" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="406.4" y="318.9" fill="#585858" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="423.2" y="318.9" fill="#d0d0d0" textLength="302.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">● Going with 1 — the closure version</text>
-<text x="406.4" y="336.9" fill="#585858" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="414.8" y="336.9" fill="#d0d0d0" textLength="327.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">   breaks on concurrent retries anyway.</text>
-<text x="406.4" y="354.9" fill="#585858" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="406.4" y="372.9" fill="#585858" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="423.2" y="372.9" fill="#6c6c6c" textLength="168.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">✻ Editing charge.ts…</text>
-<text x="406.4" y="390.9" fill="#585858" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="406.4" y="408.9" fill="#585858" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="20.0" y="426.9" fill="#808080" textLength="386.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">──────────────────────────────────────────────</text>
-<text x="406.4" y="426.9" fill="#585858" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="20.0" y="444.9" fill="#d0d0d0" textLength="226.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Selected: payments refactor</text>
-<text x="406.4" y="444.9" fill="#585858" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="20.0" y="462.9" fill="#9e9e9e" textLength="218.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Project: payments refactor</text>
-<text x="406.4" y="462.9" fill="#585858" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="20.0" y="480.9" fill="#9e9e9e" textLength="268.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">claude · opus · ctx 18% · est $6</text>
-<text x="406.4" y="480.9" fill="#585858" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="28.4" y="498.9" fill="#9e9e9e" textLength="344.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">↵ open · ⌥n new · ⌥b select · ⌥p commands</text>
-<text x="406.4" y="498.9" fill="#585858" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<rect width="1171" height="874" rx="10" fill="#12141c"/>
+<g><circle cx="24" cy="20" r="5.5" fill="#ff5f57"/><circle cx="42" cy="20" r="5.5" fill="#febc2e"/><circle cx="60" cy="20" r="5.5" fill="#28c840"/><text x="586" y="25" fill="#6b7280" font-size="12" text-anchor="middle">agentboss</text></g>
+<rect x="24.0" y="58.0" width="43.2" height="24.0" fill="#262626"/>
+<rect x="67.2" y="58.0" width="10.8" height="24.0" fill="#005f87"/>
+<rect x="78.0" y="58.0" width="216.0" height="24.0" fill="#005f87"/>
+<rect x="294.0" y="58.0" width="10.8" height="24.0" fill="#262626"/>
+<rect x="304.8" y="58.0" width="10.8" height="24.0" fill="#303030"/>
+<rect x="315.6" y="58.0" width="205.2" height="24.0" fill="#303030"/>
+<rect x="520.8" y="58.0" width="10.8" height="24.0" fill="#262626"/>
+<rect x="531.6" y="58.0" width="10.8" height="24.0" fill="#303030"/>
+<rect x="542.4" y="58.0" width="172.8" height="24.0" fill="#303030"/>
+<rect x="715.2" y="58.0" width="10.8" height="24.0" fill="#262626"/>
+<rect x="726.0" y="58.0" width="10.8" height="24.0" fill="#303030"/>
+<rect x="736.8" y="58.0" width="21.6" height="24.0" fill="#303030"/>
+<rect x="758.4" y="58.0" width="97.2" height="24.0" fill="#303030"/>
+<rect x="855.6" y="58.0" width="291.6" height="24.0" fill="#262626"/>
+<rect x="24.0" y="178.0" width="10.8" height="24.0" fill="#262626"/>
+<text x="24.0" y="74.6" fill="#00afaf" textLength="43.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600"> ☰ </text>
+<text x="67.2" y="74.6" fill="#5fafff" textLength="10.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▎</text>
+<text x="78.0" y="74.6" fill="#e4e4e4" textLength="216.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600">⠋ payments refactor </text>
+<text x="304.8" y="74.6" fill="#5fafff" textLength="10.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▎</text>
+<text x="315.6" y="74.6" fill="#ff5f5f" textLength="205.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600">◆ flaky login test </text>
+<text x="531.6" y="74.6" fill="#87d787" textLength="10.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▎</text>
+<text x="542.4" y="74.6" fill="#ffd75f" textLength="172.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600">● release notes </text>
+<text x="726.0" y="74.6" fill="#87d787" textLength="10.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▎</text>
+<text x="736.8" y="74.6" fill="#808080" textLength="21.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">· </text>
+<text x="758.4" y="74.6" fill="#bcbcbc" textLength="97.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve">PR sweep </text>
+<text x="24.0" y="98.6" fill="#585858" textLength="572.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">────────────────────────────────────────────────────┬</text>
+<text x="596.4" y="98.6" fill="#00ffff" textLength="550.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600">───────────────────────────────────────────────────</text>
+<text x="34.8" y="122.6" fill="#9e9e9e" textLength="97.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve">agentboss</text>
+<text x="132.0" y="122.6" fill="#87d787" textLength="32.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ⠙1</text>
+<text x="164.4" y="122.6" fill="#ff5f5f" textLength="32.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600"> ◆1</text>
+<text x="196.8" y="122.6" fill="#ffd75f" textLength="32.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ●1</text>
+<text x="456.0" y="122.6" fill="#9e9e9e" textLength="129.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">⌥p commands </text>
+<text x="585.6" y="122.6" fill="#585858" textLength="10.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="24.0" y="146.6" fill="#808080" textLength="561.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">────────────────────────────────────────────────────</text>
+<text x="585.6" y="146.6" fill="#585858" textLength="10.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="607.2" y="146.6" fill="#d0d0d0" textLength="108.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">● Reading </text>
+<text x="715.2" y="146.6" fill="#d0d0d0" textLength="194.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600">payments/charge.ts</text>
+<text x="24.0" y="170.6" fill="#5fafff" textLength="32.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ▾ </text>
+<text x="56.4" y="170.6" fill="#5fafff" textLength="86.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600">shipping</text>
+<text x="142.8" y="170.6" fill="#9e9e9e" textLength="21.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 2</text>
+<text x="585.6" y="170.6" fill="#585858" textLength="10.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="628.8" y="170.6" fill="#6c6c6c" textLength="345.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">⎿  Read 214 lines · 3 call sites</text>
+<text x="24.0" y="194.6" fill="#9e9e9e" textLength="10.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">›</text>
+<text x="34.8" y="194.6" fill="#42b3c2" textLength="10.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600">▎</text>
+<text x="45.6" y="194.6" fill="#5fafff" textLength="10.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="56.4" y="194.6" fill="#9e9e9e" textLength="21.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">1 </text>
+<text x="78.0" y="194.6" fill="#d0d0d0" textLength="183.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">payments refactor</text>
+<text x="348.0" y="194.6" fill="#d7afff" textLength="43.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve">opus</text>
+<text x="391.2" y="194.6" fill="#808080" textLength="86.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">     18%</text>
+<text x="477.6" y="194.6" fill="#d0d0d0" textLength="64.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">    $6</text>
+<text x="553.2" y="194.6" fill="#87d787" textLength="10.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▶</text>
+<text x="585.6" y="194.6" fill="#585858" textLength="10.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="45.6" y="218.6" fill="#5fafff" textLength="10.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="56.4" y="218.6" fill="#9e9e9e" textLength="21.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">2 </text>
+<text x="78.0" y="218.6" fill="#ff5f5f" textLength="259.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600">flaky login test        </text>
+<text x="348.0" y="218.6" fill="#d7afff" textLength="43.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve">opus</text>
+<text x="391.2" y="218.6" fill="#808080" textLength="86.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">      9%</text>
+<text x="477.6" y="218.6" fill="#d0d0d0" textLength="64.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">    $1</text>
+<text x="553.2" y="218.6" fill="#ff5f5f" textLength="10.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600">◆</text>
+<text x="585.6" y="218.6" fill="#585858" textLength="10.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="607.2" y="218.6" fill="#d0d0d0" textLength="118.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">● The bug: </text>
+<text x="726.0" y="218.6" fill="#ffd75f" textLength="75.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">retry()</text>
+<text x="801.6" y="218.6" fill="#d0d0d0" textLength="108.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> drops the</text>
+<text x="24.0" y="242.6" fill="#87d787" textLength="32.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ▾ </text>
+<text x="56.4" y="242.6" fill="#87d787" textLength="75.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600">reviews</text>
+<text x="132.0" y="242.6" fill="#9e9e9e" textLength="21.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 2</text>
+<text x="585.6" y="242.6" fill="#585858" textLength="10.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="596.4" y="242.6" fill="#d0d0d0" textLength="442.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">   idempotency key on its second attempt,</text>
+<text x="45.6" y="266.6" fill="#87d787" textLength="10.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="56.4" y="266.6" fill="#9e9e9e" textLength="21.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">3 </text>
+<text x="78.0" y="266.6" fill="#ffd75f" textLength="140.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">release notes</text>
+<text x="348.0" y="266.6" fill="#87d7ff" textLength="64.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">sonnet</text>
+<text x="412.8" y="266.6" fill="#808080" textLength="64.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">    2%</text>
+<text x="477.6" y="266.6" fill="#d0d0d0" textLength="64.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">    $0</text>
+<text x="553.2" y="266.6" fill="#ffd75f" textLength="10.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">●</text>
+<text x="585.6" y="266.6" fill="#585858" textLength="10.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="596.4" y="266.6" fill="#d0d0d0" textLength="442.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">   so a gateway timeout can charge twice.</text>
+<text x="45.6" y="290.6" fill="#87d787" textLength="10.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="56.4" y="290.6" fill="#9e9e9e" textLength="21.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">4 </text>
+<text x="78.0" y="290.6" fill="#d0d0d0" textLength="86.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">PR sweep</text>
+<text x="348.0" y="290.6" fill="#87d7ff" textLength="64.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">sonnet</text>
+<text x="412.8" y="290.6" fill="#808080" textLength="64.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">    5%</text>
+<text x="477.6" y="290.6" fill="#d0d0d0" textLength="64.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">    $1</text>
+<text x="553.2" y="290.6" fill="#ffaf5f" textLength="10.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">⏸</text>
+<text x="585.6" y="290.6" fill="#585858" textLength="10.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="596.4" y="290.6" fill="#d0d0d0" textLength="172.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">   Two ways out:</text>
+<text x="24.0" y="314.6" fill="#808080" textLength="140.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ▸ Archived 1</text>
+<text x="585.6" y="314.6" fill="#585858" textLength="10.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="585.6" y="338.6" fill="#585858" textLength="10.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="628.8" y="338.6" fill="#d0d0d0" textLength="226.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">1. Thread it through </text>
+<text x="855.6" y="338.6" fill="#87d7ff" textLength="129.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">RetryContext</text>
+<text x="585.6" y="362.6" fill="#585858" textLength="10.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="628.8" y="362.6" fill="#d0d0d0" textLength="259.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve">2. Pin it in the closure</text>
+<text x="585.6" y="386.6" fill="#585858" textLength="10.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="585.6" y="410.6" fill="#585858" textLength="10.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="607.2" y="410.6" fill="#d0d0d0" textLength="388.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">● Going with 1 — the closure version</text>
+<text x="585.6" y="434.6" fill="#585858" textLength="10.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="596.4" y="434.6" fill="#d0d0d0" textLength="421.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve">   breaks on concurrent retries anyway.</text>
+<text x="585.6" y="458.6" fill="#585858" textLength="10.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="585.6" y="482.6" fill="#00ffff" textLength="10.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600">│</text>
+<text x="607.2" y="482.6" fill="#6c6c6c" textLength="216.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">✻ Editing charge.ts…</text>
+<text x="585.6" y="506.6" fill="#00ffff" textLength="10.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600">│</text>
+<text x="585.6" y="530.6" fill="#00ffff" textLength="10.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600">│</text>
+<text x="585.6" y="554.6" fill="#00ffff" textLength="10.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600">│</text>
+<text x="585.6" y="578.6" fill="#00ffff" textLength="10.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600">│</text>
+<text x="585.6" y="602.6" fill="#00ffff" textLength="10.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600">│</text>
+<text x="585.6" y="626.6" fill="#00ffff" textLength="10.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600">│</text>
+<text x="585.6" y="650.6" fill="#00ffff" textLength="10.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600">│</text>
+<text x="585.6" y="674.6" fill="#00ffff" textLength="10.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600">│</text>
+<text x="585.6" y="698.6" fill="#00ffff" textLength="10.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600">│</text>
+<text x="585.6" y="722.6" fill="#00ffff" textLength="10.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600">│</text>
+<text x="24.0" y="746.6" fill="#808080" textLength="561.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">────────────────────────────────────────────────────</text>
+<text x="585.6" y="746.6" fill="#00ffff" textLength="10.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600">│</text>
+<text x="24.0" y="770.6" fill="#d0d0d0" textLength="291.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Selected: payments refactor</text>
+<text x="585.6" y="770.6" fill="#00ffff" textLength="10.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600">│</text>
+<text x="24.0" y="794.6" fill="#9e9e9e" textLength="280.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Project: payments refactor</text>
+<text x="585.6" y="794.6" fill="#00ffff" textLength="10.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600">│</text>
+<text x="24.0" y="818.6" fill="#9e9e9e" textLength="345.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">claude · opus · ctx 18% · est $6</text>
+<text x="585.6" y="818.6" fill="#00ffff" textLength="10.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600">│</text>
+<text x="34.8" y="842.6" fill="#9e9e9e" textLength="302.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Ctrl+\ sidebar · ⌥p commands</text>
+<text x="585.6" y="842.6" fill="#00ffff" textLength="10.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="600">│</text>
 </svg>

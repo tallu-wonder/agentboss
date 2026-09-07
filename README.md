@@ -9,7 +9,7 @@
 ![go 1.25+](https://img.shields.io/badge/go-1.25%2B-00ADD8.svg)
 ![tmux 3.2+](https://img.shields.io/badge/tmux-3.2%2B-1BB91F.svg)
 
-<img src="docs/desk.svg" alt="agentboss: a sidebar of grouped sessions showing status, keyboard focus and selected-session details, tabs across the top, and the live agent filling the right-hand pane" width="100%">
+<a href="docs/desk.svg"><img src="docs/desk.svg" alt="agentboss with grouped sessions, colored metrics and status icons, and a cyan border marking the focused agent pane" width="100%"></a>
 
 </div>
 
@@ -62,16 +62,28 @@ and a status icon at the right of its row: `▶ working`, `◆ needs you`, `● 
 since you looked`, `⏸ idle`, `■ stopped`. Group it, drag it, rename it. Walk away and
 the agents keep going.
 
-<table>
-<tr>
-<td width="50%"><img src="docs/info.svg" alt="the session info popup, showing status, agent, model, context percentage, estimated cost, folder, group and process" width="100%"></td>
-<td width="50%"><img src="docs/keys.svg" alt="the keys overlay, listing every binding" width="100%"></td>
-</tr>
-<tr>
-<td align="center"><code>opt+v</code> — everything about one session</td>
-<td align="center"><code>opt+?</code> — every key, without leaving the desk</td>
-</tr>
-</table>
+A cyan top border marks the pane receiving input. Click inside a pane or press
+`ctrl+\` to switch focus; the sidebar's header and selected row brighten when
+it has the keyboard. [Compare sidebar and agent focus](docs/README.md#focus).
+
+Confirmations, session info, and help open over the pane that triggered them.
+While a dialog is open, its outline takes the focus accent and the pane borders
+dim. Dismissing it returns focus to the same pane. Click **Yes** or **No** in a
+confirmation, or use `y` to confirm and `n` / Escape to cancel. Enter never
+approves a confirmation.
+
+<a href="docs/confirm.svg"><img src="docs/confirm.svg" alt="Close-up of a stop confirmation centered over the agent pane, with clickable Yes and No buttons" width="100%"></a>
+
+**`opt+v` — session details.** Inspect the agent, model, context, estimated cost,
+folder, group, and process in a scrollable dialog.
+
+<a href="docs/info.svg"><img src="docs/info.svg" alt="Close-up of the session info dialog showing status, model, context, cost, folder, group and process" width="100%"></a>
+
+**`opt+?` — keyboard reference.** Browse shortcuts without leaving the desk.
+Screenshots link to their SVG originals for zooming; the
+[screenshot guide](docs/README.md) includes the full gallery and capture steps.
+
+<a href="docs/keys.svg"><img src="docs/keys.svg" alt="Close-up of the scrollable keyboard reference over the agent pane" width="100%"></a>
 
 ## Two agents, one desk
 
@@ -161,28 +173,26 @@ move the cycle keys with `AGENTBOSS_PREV_KEY` / `AGENTBOSS_NEXT_KEY`.
 Mouse: click a row to open it, drag rows and headers to reorder and regroup,
 click tabs to switch, drag tabs to reorder, middle-click to request a stop, right-click
 for a menu, wheel to scroll, and click into the session to talk to the agent.
+Confirmation dialogs accept clicks on **Yes** and **No**.
 When more tabs are open than fit, the strip follows the active one and the
 rest collapse into `‹N` / `N›` chips — click a chip to step that way; it turns
 red when a hidden session needs you.
 
 ## Finding and organizing work
 
-<table>
-<tr>
-<td width="50%"><img src="docs/commands.svg" alt="Searchable command palette with keyboard shortcuts" width="100%"></td>
-<td width="50%"><img src="docs/attention.svg" alt="Attention queue showing blocked requests and how long they have waited" width="100%"></td>
-</tr>
-</table>
-
 `opt+p` searches the available commands. Bare letters still cannot trigger desk
 commands; use Option/Alt to open a dialog, then type normally inside it. All
 shortcut hints come from the same definitions used by the global bindings.
+
+<a href="docs/commands.svg"><img src="docs/commands.svg" alt="Full-width view of the command palette and its keyboard shortcuts" width="100%"></a>
 
 `opt+A` opens a flat attention queue, with blocking requests first, oldest wait
 first, and each request's reason. Viewing a request marks its notification seen;
 **it stays blocked until the agent resumes**. Completed-turn notifications clear
 when viewed. `opt+e` filters by agent or project; search accepts combinations such
 as `agent:codex project:payments status:blocked`. Escape clears the filters.
+
+<a href="docs/attention.svg"><img src="docs/attention.svg" alt="Full-width view of the attention queue, with blocking requests and completed work" width="100%"></a>
 
 Select sessions with `opt+b`, or all visible sessions with `opt+B`, then use
 `opt+m` to move them or `opt+x` to archive them. Selection survives filtering and
@@ -197,10 +207,9 @@ sidebars at least 46 columns wide. Percentages omit the tilde; Claude context is
 still an estimate, explained in session info. Estimated costs round to whole
 dollars; large costs use `k`/`M` suffixes. Play is green, pause amber, and stop red.
 Models retain their colors; context turns yellow at 60% and red at 85% utilization.
-A cyan top border marks the pane receiving input.
-The sidebar's header and selection brighten when it has focus; a popup takes the
-focus accent while the underlying panes recede. `›` marks the selected row,
-`▎` the displayed session, and `✓` selected batch entries.
+`›` marks the selected row, `▎` the displayed session, and `✓` selected batch
+entries. These markers keep their meaning when keyboard focus moves to another
+pane.
 
 New sessions use a dialog with recent folders, visible Tab completion candidates,
 and persistent validation. Arrow keys choose a folder. Shift+Tab goes back from a
@@ -345,9 +354,10 @@ things that only break in situ — tabs, digit keys, confirmations, notification
 escaping. CI runs both on Linux and macOS, alongside `go vet`, `staticcheck` and
 `govulncheck`.
 
-The screenshots above are the real TUI: captured from a live desk with
-`tmux capture-pane -e` and rendered by [`docs/ansi2svg.py`](docs/ansi2svg.py), so
-they cannot drift into being mock-ups.
+Regenerate the screenshots with `bash docs/demo.sh`. The script runs a private
+demo desk with fabricated sessions, captures the real TUI, and produces large
+SVGs and pane close-ups. See the [screenshot guide](docs/README.md) for dimensions,
+cropping, and manual capture instructions.
 
 Linux builds and passes both suites in CI, but the desk has only been used in
 anger on macOS; rough edges there are likely and reports are welcome.
