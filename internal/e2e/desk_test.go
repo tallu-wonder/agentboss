@@ -891,7 +891,8 @@ func TestActionChordsWorkFromInsideAnAgent(t *testing.T) {
 	dialogClosed := func(title string) bool {
 		// The terminal removes the popup before the manager receives its result.
 		// Wait for both before sending another action to the manager.
-		return !strings.Contains(holder(), title) && !strings.Contains(d.sidebar(), "Typing into: dialog")
+		active, _ := d.tmux("show-options", "-w", "-v", "-t", "agentboss:", "@agentboss_dialog")
+		return !strings.Contains(holder(), title) && strings.TrimSpace(active) == "0"
 	}
 	d.waitFor("the confirm popup to appear", func() bool {
 		return strings.Contains(holder(), "Stop session?")

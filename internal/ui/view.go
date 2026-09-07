@@ -86,9 +86,15 @@ var (
 // ---- layout metrics ------------------------------------------------------
 
 // listTopY is the first screen row of list content (header + rule above).
-func (m *Model) listTopY() int { return 3 }
+func (m *Model) listTopY() int { return 2 }
 
-func (m *Model) listInnerHeight() int { return max(0, m.height-4) } // header, rule, footer
+func (m *Model) listInnerHeight() int { return max(0, m.height-3) } // header, rule, footer
+
+func (m *Model) sidebarFocused() bool { return !m.unfocused && !m.dialogActive }
+
+func (m *Model) listFocused() bool {
+	return m.sidebarFocused() && (m.mode == modeNormal || m.mode == modeSearch)
+}
 
 // ---- helpers ---------------------------------------------------------
 
@@ -197,7 +203,7 @@ func (m *Model) View() string {
 		body = m.viewList()
 	}
 	return m.viewHeader() + "\n" +
-		m.viewFocus() + "\n" + m.viewFilterBar() + "\n" +
+		m.viewFilterBar() + "\n" +
 		body + "\n" +
 		m.viewFooter()
 }
@@ -242,7 +248,11 @@ func (m *Model) overlay(box string) string {
 
 func (m *Model) viewHeader() string {
 	working, needs, attn := m.counts()
-	left := " " + stHeader.Render("agentboss")
+	style := stDim
+	if m.sidebarFocused() {
+		style = stHeader
+	}
+	left := " " + style.Render("agentboss")
 	if working > 0 {
 		left += stWorking.Render(fmt.Sprintf(" ⠙%d", working))
 	}
@@ -373,7 +383,11 @@ func (m *Model) viewList() string {
 			line = m.renderSessionRow(r.id, nums[r.id], m.width)
 		}
 		if i == m.sel {
-			line = stSelected.Render(pad(line, m.width))
+			selection := stSelected.Background(lipgloss.Color("235"))
+			if m.listFocused() {
+				selection = stSelected
+			}
+			line = selection.Render(pad(line, m.width))
 		}
 		lines = append(lines, line)
 		if m.rowHeight(r) > 1 {
@@ -434,7 +448,10 @@ func (m *Model) renderSessionRow(id string, num, w int) string {
 	icon, style := m.statusGlyph(k)
 	cursor, active, mark := " ", " ", ""
 	if id == m.selectedSessionID() {
-		cursor = "›"
+		cursor = stDim.Render("›")
+		if m.listFocused() {
+			cursor = stActive.Render("›")
+		}
 	}
 	if id == m.activeID {
 		active = stActive.Render("▎")

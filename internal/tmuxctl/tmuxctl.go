@@ -436,8 +436,16 @@ func CapturePanePlain(name string) (string, error) {
 // status line is the tab bar (top), mouse is on, and the prefix is moved off
 // C-b so claude's readline keys pass through untouched.
 func ConfigureManagerSession() {
-	_, _ = run("set-option", "-w", "-t", "="+ManagerSession+":", "pane-border-style", "fg=colour244")
-	_, _ = run("set-option", "-w", "-t", "="+ManagerSession+":", "pane-active-border-style", "fg=colour51,bold")
+	for _, kv := range [][2]string{
+		{"@agentboss_dialog", "0"},
+		{"pane-border-status", "top"},
+		{"pane-border-lines", "single"},
+		{"pane-border-format", ""},
+		{"pane-border-style", "fg=colour240"},
+		{"pane-active-border-style", "fg=#{?#{==:#{@agentboss_dialog},1},colour240,colour51},bold"},
+	} {
+		_, _ = run("set-option", "-w", "-t", "="+ManagerSession+":", kv[0], kv[1])
+	}
 	opts := [][2]string{
 		{"status", "on"},
 		{"status-position", "top"},
@@ -454,6 +462,15 @@ func ConfigureManagerSession() {
 	for _, kv := range opts {
 		_ = SetSessionOption(ManagerSession, kv[0], kv[1])
 	}
+}
+
+// SetDialogActive gives a popup the focus accent while its parent panes recede.
+func SetDialogActive(active bool) {
+	value := "0"
+	if active {
+		value = "1"
+	}
+	_, _ = run("set-option", "-w", "-t", "="+ManagerSession+":", "@agentboss_dialog", value)
 }
 
 // ConfigureAgentSession applies per-session options to an agent session: no

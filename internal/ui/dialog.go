@@ -36,6 +36,9 @@ func (m *Model) startPaneDialog(lines []string, confirm bool) bool {
 	}
 	m.dialogID++
 	m.dialogActive = true
+	if m.sidebarPane != "" {
+		tmuxctl.SetDialogActive(true)
+	}
 	if !confirm {
 		m.confirmFn = nil
 	}
@@ -93,6 +96,9 @@ func (m *Model) finishPaneDialog(result dialogResult) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.dialogActive = false
+	if m.sidebarPane != "" {
+		tmuxctl.SetDialogActive(false)
+	}
 	if result.Fallback {
 		m.focusSidebar()
 		return m, nil

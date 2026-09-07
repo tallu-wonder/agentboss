@@ -89,21 +89,6 @@ func (m *Model) keyScroll(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *Model) viewFocus() string {
-	text := "Typing into: sidebar"
-	if m.dialogActive {
-		text = "Typing into: dialog"
-	} else if m.unfocused {
-		if s := m.st.Session(m.activeID); s != nil {
-			agent := " · " + s.AgentOf()
-			text = "Typing: " + pad(s.Name, max(1, m.width-9-ansi.StringWidth(agent))) + agent
-		} else {
-			text = "Typing into: session pane"
-		}
-	}
-	return pad(stActive.Render(" "+text), m.width)
-}
-
 func (m *Model) viewFilterBar() string {
 	if label := m.filterLabel(); label != "" {
 		return pad(stNotice.Render(" "+label+" · Esc clear"), m.width)
