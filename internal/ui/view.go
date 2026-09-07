@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"strings"
 	"time"
@@ -57,7 +58,7 @@ func groupTmux(color int) string        { return groupPalette[groupSlot(color)].
 // palette
 var (
 	cAccent  = lipgloss.Color("6")   // cyan
-	cWorking = lipgloss.Color("14")  // bright cyan
+	cWorking = lipgloss.Color("114") // green: running
 	cAlert   = lipgloss.Color("203") // red-ish: needs you
 	cNew     = lipgloss.Color("221") // yellow: finished, unseen
 	cDim     = lipgloss.Color("247")
@@ -69,7 +70,8 @@ var (
 	stWorking  = lipgloss.NewStyle().Foreground(cWorking)
 	stAlert    = lipgloss.NewStyle().Foreground(cAlert).Bold(true)
 	stNew      = lipgloss.NewStyle().Foreground(cNew)
-	stIdle     = lipgloss.NewStyle().Foreground(cDim)
+	stIdle     = lipgloss.NewStyle().Foreground(lipgloss.Color("215")) // amber: paused
+	stStopped  = lipgloss.NewStyle().Foreground(cAlert)
 	stDormant  = lipgloss.NewStyle().Foreground(cFaint)
 	stText     = lipgloss.NewStyle().Foreground(cText)
 	stDim      = lipgloss.NewStyle().Foreground(cDim)
@@ -161,7 +163,7 @@ func (m *Model) statusGlyph(k status.Kind) (string, lipgloss.Style) {
 	case status.Idle:
 		return "⏸", stIdle
 	default:
-		return "■", stDormant
+		return "■", stStopped
 	}
 }
 
@@ -508,21 +510,16 @@ func modelWindow(family string) int {
 	}
 }
 
-// fmtUSD renders an estimated dollar amount compactly ("$0.42", "$3.7",
-// "$128").
+// fmtUSD rounds an estimated cost to whole dollars, retaining compact k/M
+// notation for large totals. The underlying estimate keeps its precision.
 func fmtUSD(v float64) string {
-	switch {
-	case v >= 9_999.5:
+	v = math.Round(v)
+	if v >= 10_000 {
 		// The same compact k/M notation as token counts keeps large totals
 		// within five cells, including the dollar sign.
 		return "$" + fmtTokens(int(v))
-	case v >= 99.95:
-		return fmt.Sprintf("$%.0f", v)
-	case v >= 9.995:
-		return fmt.Sprintf("$%.1f", v)
-	default:
-		return fmt.Sprintf("$%.2f", v)
 	}
+	return fmt.Sprintf("$%.0f", v)
 }
 
 // fmtTokens renders a token count in at most four cells ("87k", "1.2M",

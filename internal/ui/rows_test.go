@@ -168,6 +168,22 @@ func TestPad(t *testing.T) {
 	}
 }
 
+func TestEstimatedCostRoundsToWholeDollars(t *testing.T) {
+	for _, tc := range []struct {
+		cost float64
+		want string
+	}{
+		{0, "$0"}, {.42, "$0"}, {.5, "$1"},
+		{1.5, "$2"}, {2.5, "$3"}, {5.85, "$6"},
+		{12.3, "$12"}, {12.7, "$13"}, {99.99, "$100"},
+		{9999.49, "$9999"}, {9999.5, "$10k"}, {1_000_000, "$1M"},
+	} {
+		if got := fmtUSD(tc.cost); got != tc.want {
+			t.Errorf("fmtUSD(%v) = %q, want %q", tc.cost, got, tc.want)
+		}
+	}
+}
+
 func TestColumnFormattersFitTheirColumns(t *testing.T) {
 	// Every value must fit its column, or padNum truncates and drops the unit
 	// (a 5-char "13.4M" in a 4-cell column once rendered as "13.4").

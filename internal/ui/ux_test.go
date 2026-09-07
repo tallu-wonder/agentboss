@@ -275,8 +275,8 @@ func TestRowMetricsStayAligned(t *testing.T) {
 				total                              float64
 				kind                               status.Kind
 			}{
-				{"opus", state.AgentClaude, "9%", "$0.42", "▶", 90_000, .42, status.Working},
-				{"sonnet", state.AgentClaude, "70%", "$12.3", "◆", 700_000, 12.3, status.NeedsYou},
+				{"opus", state.AgentClaude, "9%", "$0", "▶", 90_000, .42, status.Working},
+				{"sonnet", state.AgentClaude, "70%", "$12", "◆", 700_000, 12.3, status.NeedsYou},
 				{"haiku", state.AgentClaude, "100%", "$128", "●", 1_000_000, 128, status.Attention},
 				{"gpt-5.6", state.AgentCodex, "85%", "", "⏸", 850_000, 0, status.Idle},
 				{"opus", state.AgentClaude, "90%", "$100k", "■", 900_000, 99999, status.Dormant},

@@ -193,7 +193,8 @@ The sidebar reserves space for session names and statuses. The selected session'
 project, branch, agent, context percentage and estimated conversation cost appear
 below the list. `opt+t` adds compact, aligned model, context and cost columns in
 sidebars at least 46 columns wide. Percentages omit the tilde; Claude context is
-still an estimate, explained in session info. Large costs use `k`/`M` suffixes.
+still an estimate, explained in session info. Estimated costs round to whole
+dollars; large costs use `k`/`M` suffixes. Play is green, pause amber, and stop red.
 Models retain their colors; context turns yellow at 60% and red at 85% utilization.
 The persistent **Typing** line identifies the pane receiving input; `›` marks the
 selected row, `▎` the displayed session, and `✓` selected batch entries.
