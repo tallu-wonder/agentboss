@@ -766,23 +766,14 @@ func TestCycleKeysWorkFromInsideAnAgent(t *testing.T) {
 		time.Sleep(900 * time.Millisecond)
 	}
 	press("1b", "5d") // alt+]
-	after := shown()
-	if after == before {
-		t.Fatalf("alt+] did not move off %s while the agent had focus", before)
-	}
+	d.waitFor("alt+] to change the displayed session", func() bool { return shown() != "" && shown() != before })
 	press("1b", "5b") // alt+[
-	if back := shown(); back != before {
-		t.Errorf("alt+[ should have returned to %s, got %s", before, back)
-	}
+	d.waitFor("alt+[ to restore the displayed session", func() bool { return shown() == before })
 	// The csi-u form the desk asks terminals for must work too.
 	press("1b", "5b", "39", "33", "3b", "33", "75") // ESC[93;3u = alt+]
-	if csiu := shown(); csiu == before {
-		t.Errorf("csi-u alt+] did not switch session (still %s)", before)
-	}
+	d.waitFor("csi-u alt+] to change the displayed session", func() bool { return shown() != "" && shown() != before })
 	press("1b", "5b", "39", "31", "3b", "33", "75") // ESC[91;3u = alt+[
-	if back := shown(); back != before {
-		t.Errorf("csi-u alt+[ should have returned to %s, got %s", before, back)
-	}
+	d.waitFor("csi-u alt+[ to restore the displayed session", func() bool { return shown() == before })
 	// And the keyboard must still belong to the agent, not the sidebar.
 	role, _ := d.tmux("display-message", "-p", "-t", "agentboss:", "#{@agentboss_role}")
 	if strings.TrimSpace(role) != "viewport" {
@@ -793,13 +784,9 @@ func TestCycleKeysWorkFromInsideAnAgent(t *testing.T) {
 	// session from inside an agent, keyboard staying where it is.
 	press("1b", "31") // alt+1
 	first := d.state().Sessions[0].ID
-	if now := shown(); now != first {
-		t.Errorf("alt+1 showed %s, want the first open session %s", now, first)
-	}
+	d.waitFor("alt+1 to show the first session", func() bool { return shown() == first })
 	press("1b", "32") // alt+2
-	if now := shown(); now == first {
-		t.Errorf("alt+2 did not move off the first session")
-	}
+	d.waitFor("alt+2 to show the second session", func() bool { return shown() != "" && shown() != first })
 	before = shown() // the escape-sequence probes below assert no movement
 
 	// Binding the CSI prefix must not swallow the sequences that share it. Mouse
@@ -901,6 +888,11 @@ func TestActionChordsWorkFromInsideAnAgent(t *testing.T) {
 		text, _ := d.tmux("capture-pane", "-p", "-t", "holder")
 		return text
 	}
+	dialogClosed := func(title string) bool {
+		// The terminal removes the popup before the manager receives its result.
+		// Wait for both before sending another action to the manager.
+		return !strings.Contains(holder(), title) && !strings.Contains(d.sidebar(), "Typing into: dialog")
+	}
 	d.waitFor("the confirm popup to appear", func() bool {
 		return strings.Contains(holder(), "Stop session?")
 	})
@@ -945,7 +937,7 @@ func TestActionChordsWorkFromInsideAnAgent(t *testing.T) {
 	if _, err := d.tmux("send-keys", "-t", "holder", "Escape"); err != nil {
 		t.Fatal(err)
 	}
-	d.waitFor("confirmation to cancel", func() bool { return !strings.Contains(holder(), "Stop session?") })
+	d.waitFor("confirmation to cancel", func() bool { return dialogClosed("Stop session?") })
 	if len(d.liveSessions()) != 2 {
 		t.Fatal("canceling the popup stopped an agent")
 	}
@@ -954,7 +946,7 @@ func TestActionChordsWorkFromInsideAnAgent(t *testing.T) {
 	}
 	d.waitFor("another confirmation", func() bool { return strings.Contains(holder(), "Stop session?") })
 	d.clickButton("holder", holder(), "No")
-	d.waitFor("No to cancel the popup", func() bool { return !strings.Contains(holder(), "Stop session?") })
+	d.waitFor("No to cancel the popup", func() bool { return dialogClosed("Stop session?") })
 	if len(d.liveSessions()) != 2 {
 		t.Fatal("clicking No stopped an agent")
 	}
@@ -974,6 +966,7 @@ func TestActionChordsWorkFromInsideAnAgent(t *testing.T) {
 	if live := d.liveSessions(); len(live) != 1 || live[0] != keep {
 		t.Errorf("wrong session closed: still live %v", live)
 	}
+	d.waitFor("Yes to close the popup", func() bool { return dialogClosed("Stop session?") })
 	for _, dialog := range []struct{ hex, title string }{{"76", "process"}, {"3f", "Keys and status"}, {"71", "quit agentboss?"}} {
 		if _, err := d.tmux("send-keys", "-t", "holder", "-H", "1b", dialog.hex); err != nil {
 			t.Fatal(err)
@@ -985,7 +978,7 @@ func TestActionChordsWorkFromInsideAnAgent(t *testing.T) {
 		if _, err := d.tmux("send-keys", "-t", "holder", "Escape"); err != nil {
 			t.Fatal(err)
 		}
-		d.waitFor(dialog.title+" to close", func() bool { return !strings.Contains(holder(), dialog.title) })
+		d.waitFor(dialog.title+" to close", func() bool { return dialogClosed(dialog.title) })
 		role, _ := d.tmux("display-message", "-p", "-t", "agentboss:", "#{@agentboss_role}")
 		if strings.TrimSpace(role) != "viewport" {
 			t.Fatalf("%s did not return focus to the viewport", dialog.title)
@@ -1004,7 +997,7 @@ func TestActionChordsWorkFromInsideAnAgent(t *testing.T) {
 		if _, err := d.tmux("send-keys", "-t", "holder", "n"); err != nil {
 			t.Fatal(err)
 		}
-		d.waitFor(action.title+" to cancel", func() bool { return !strings.Contains(holder(), action.title) })
+		d.waitFor(action.title+" to cancel", func() bool { return dialogClosed(action.title) })
 		if len(d.liveSessions()) != 1 {
 			t.Fatalf("canceling %s stopped the process", action.command)
 		}
