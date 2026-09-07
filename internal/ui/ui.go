@@ -24,6 +24,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 
 	"github.com/tallu-wonder/agentboss/internal/agents"
+	"github.com/tallu-wonder/agentboss/internal/keymap"
 	"github.com/tallu-wonder/agentboss/internal/notify"
 	"github.com/tallu-wonder/agentboss/internal/paths"
 	"github.com/tallu-wonder/agentboss/internal/reveal"
@@ -53,6 +54,7 @@ const (
 	modeImport      // pick a past conversation to add
 	modeHelp
 	modeInfo // per-session details popup
+	modeCommands
 )
 
 type tickMsg time.Time
@@ -104,10 +106,26 @@ type Model struct {
 	notified    map[string]status.Kind
 	notifyReady bool // seeded: alerts already present at startup don't fire
 
-	mode   mode
-	input  textinput.Model
-	search textinput.Model
-	filter string
+	mode          mode
+	input         textinput.Model
+	search        textinput.Model
+	filter        string
+	attentionOnly bool
+	agentFilter   string
+	projectFilter string
+	marked        map[string]bool
+	moveTargets   []string
+	undoSessions  []undoSession
+	scroll        int
+	pickTop       int
+	inputErr      string
+	inputInitial  string
+	suggestions   []string
+	suggestionSel int
+	wtName        string
+	branchDir     string
+	branchValue   string
+	branchChecked time.Time
 
 	// unfocused: the keyboard is elsewhere (usually inside the agent). Read
 	// from tmux's pane_active each tick; the sidebar dims its header so a
@@ -217,18 +235,24 @@ func tickCmd() tea.Cmd {
 
 // flash shows a transient footer notice.
 func (m *Model) flash(msg string, isErr bool) {
+	if isErr && (m.inputMode() || m.mode == modeGroupPick) {
+		m.inputErr = msg
+		return
+	}
 	m.notice = msg
 	m.noticeErr = isErr
 	m.noticeUntil = time.Now().Add(4 * time.Second)
 }
 
 // save persists state immediately; failures surface as a notice.
-func (m *Model) save() {
+func (m *Model) save() bool {
+	m.dirty = true
 	if err := m.st.Save(m.statePath); err != nil {
 		m.flash("failed to save state: "+err.Error(), true)
-		return
+		return false
 	}
 	m.dirty = false
+	return true
 }
 
 // ---- viewport & layout ---------------------------------------------------
@@ -238,9 +262,7 @@ func (m *Model) save() {
 func (m *Model) sidebarWidth(totalW int) int {
 	w := m.st.SidebarWidth
 	if w == 0 {
-		// Wide enough that every column — cost included — is on by default;
-		// a desk that hides a feature until a divider is dragged doesn't have
-		// that feature.
+		// Room for a useful session name and status on a typical terminal.
 		w = 46
 	}
 	if maxW := totalW - 30; w > maxW {
@@ -367,8 +389,7 @@ func (m *Model) reconcileViewport() {
 	}
 }
 
-// sawSession records that the user is now looking at a session; seeing it
-// dismisses its alert (whatever it was, it's on screen now).
+// sawSession records viewing separately from the agent's lifecycle.
 func (m *Model) sawSession(id string) {
 	s := m.st.Session(id)
 	if s == nil {
@@ -379,13 +400,20 @@ func (m *Model) sawSession(id string) {
 	m.clearAlert(id)
 }
 
-// clearAlert dismisses a session's attention/needs-you flag.
+// clearAlert acknowledges the latest notification without overwriting hooks.
 func (m *Model) clearAlert(id string) {
-	if r, ok := m.runtime[id]; ok && (r.Status == status.Attention || r.Status == status.NeedsYou) {
-		r.Status = status.Idle
-		r.Message = ""
-		_ = status.Write(paths.StatusDir(), id, r)
-		m.runtime[id] = r
+	s := m.st.Session(id)
+	if s == nil {
+		return
+	}
+	r := m.runtime[id]
+	stamp := r.UpdatedAt
+	if t := m.probeMTime(id); t.After(stamp) {
+		stamp = t
+	}
+	if (m.statusOf(id) == status.Attention || m.statusOf(id) == status.NeedsYou) && stamp.After(s.SeenAt) {
+		s.SeenAt = time.Now()
+		m.dirty = true
 	}
 }
 
@@ -432,7 +460,7 @@ func (m *Model) open(id string, focusViewport bool) {
 	// start something.
 	if s.Archived && !m.isLive(id) {
 		name := s.Name
-		m.confirm("revive "+name+"?", func() tea.Cmd {
+		m.confirm("Restore and resume?\n\nStarts the agent and restores this entry from Archived.\n\n"+name, func() tea.Cmd {
 			m.reviveAndOpen(id, focusViewport)
 			return nil
 		})
@@ -783,11 +811,13 @@ func tabGlyph(k status.Kind, spin int) (string, string) {
 
 // actNeedsSidebar lists the chords that open a prompt, picker, popup or
 // confirmation — run from inside an agent, they must bring the keyboard along.
-var actNeedsSidebar = map[string]bool{
-	"alt+n": true, "alt+W": true, "alt+N": true, "alt+i": true,
-	"alt+/": true, "alt+r": true, "alt+m": true, "alt+s": true, "alt+S": true,
-	"alt+v": true, "alt+?": true, "alt+z": true, "alt+x": true, "alt+q": true,
-}
+var actNeedsSidebar = func() map[string]bool {
+	out := map[string]bool{}
+	for _, a := range keymap.Actions {
+		out["alt+"+a.Key] = a.Sidebar
+	}
+	return out
+}()
 
 // drainCmds applies one-shot commands queued by helper subprocesses (tab
 // drag drops) — they can't write state.json themselves, the manager is its
@@ -810,6 +840,8 @@ func (m *Model) drainCmds() {
 			continue
 		}
 		switch cmd.Op {
+		case "navigate":
+			m.navigateTabs(cmd.To)
 		case "expand-group":
 			if g := m.st.Group(cmd.To); g != nil && g.Collapsed {
 				g.Collapsed = false
@@ -821,6 +853,7 @@ func (m *Model) drainCmds() {
 			// A right-click on a tab opens the same menu a right-click on the
 			// row does, selecting that row first so the menu names it.
 			if m.st.Session(cmd.To) != nil {
+				m.revealSession(cmd.To)
 				for i, r := range m.rows {
 					if r.kind == rowSession && r.id == cmd.To {
 						m.sel = i
@@ -850,8 +883,10 @@ func (m *Model) drainCmds() {
 					}
 				}
 			}
-		case "archive":
-			m.archive(cmd.From)
+		case "archive", "stop":
+			if m.mode == modeNormal {
+				m.requestSessionAction(cmd.Op, []string{cmd.From})
+			}
 		case "act":
 			// A chord pressed while an agent had the keyboard. Act on the
 			// ACTIVE session — the one on screen — by selecting its row first,
@@ -863,7 +898,7 @@ func (m *Model) drainCmds() {
 			}
 			key := tmuxctl.ActKey(cmd.To)
 			if m.activeID != "" {
-				m.selectSession(m.activeID)
+				m.revealSession(m.activeID)
 			}
 			if actNeedsSidebar[key] && m.sidebarPane != "" {
 				_ = tmuxctl.SelectPane(m.sidebarPane)
@@ -1212,16 +1247,15 @@ func (m *Model) statusOf(id string) status.Kind {
 	if phase != "" {
 		switch {
 		case !hasEvent:
-			return phase
-		case r.Status == status.NeedsYou:
-			// Never let a background probe downgrade a blocking request: it
-			// clears when you look at it, not because the log moved on.
+			return m.unseenStatus(id, phase, m.probeMTime(id))
+		case r.Status == status.NeedsYou && !(phase == status.Working && m.probeMTime(id).After(r.UpdatedAt)):
+			// Keep a blocking request until an event shows the agent resumed.
 		case m.probeMTime(id).After(r.UpdatedAt):
-			return phase // the transcript is the fresher signal
+			return m.unseenStatus(id, phase, m.probeMTime(id))
 		}
 	}
 	if hasEvent {
-		return r.Status
+		return m.unseenStatus(id, r.Status, r.UpdatedAt)
 	}
 	return status.Idle
 }
@@ -1345,38 +1379,40 @@ func (m *Model) forkSession(srcID string) {
 		return
 	}
 	m.save()
+	m.clearFilters()
 	m.buildRows()
 	m.selectSession(id)
 	m.open(id, true)
 }
 
 // sleep kills the tmux session but keeps the desk entry for later resume.
-func (m *Model) sleep(id string) {
+func (m *Model) sleep(id string) bool {
 	s := m.st.Session(id)
 	if s == nil || !m.isLive(id) {
-		return
+		return false
 	}
 	if err := tmuxctl.KillSession(state.TmuxName(id)); err != nil {
 		m.flash("sleep failed: "+err.Error(), true)
-		return
+		return false
 	}
 	delete(m.live, state.TmuxName(id))
-	m.flash(s.Name+" is dormant — enter wakes it with --resume", false)
+	m.flash(s.Name+" stopped · Enter resumes", false)
 	m.reconcileViewport()
 	m.updateTabs()
+	return true
 }
 
 // archive closes a session Chrome-style: the process is killed but the
 // entry drops into the "old" section, resumable any time.
-func (m *Model) archive(id string) {
+func (m *Model) archive(id string) bool {
 	s := m.st.Session(id)
 	if s == nil {
-		return
+		return false
 	}
 	if m.isLive(id) {
 		if err := tmuxctl.KillSession(state.TmuxName(id)); err != nil && tmuxctl.Has(state.TmuxName(id)) {
 			m.flash("couldn't kill the session's process — not closing: "+err.Error(), true)
-			return
+			return false
 		}
 		delete(m.live, state.TmuxName(id))
 	}
@@ -1385,16 +1421,17 @@ func (m *Model) archive(id string) {
 	m.buildRows()
 	m.reconcileViewport()
 	m.updateTabs()
-	m.flash(s.Name+" moved to old — open it there to bring it back", false)
+	m.flash(s.Name+" archived · Enter restores and resumes", false)
+	return true
 }
 
 // deleteSession removes a session from the desk entirely. If its live agent
 // can't be killed, the entry stays: never hide a still-running process.
-func (m *Model) deleteSession(id string) {
+func (m *Model) deleteSession(id string) bool {
 	if m.isLive(id) {
 		if err := tmuxctl.KillSession(state.TmuxName(id)); err != nil && tmuxctl.Has(state.TmuxName(id)) {
 			m.flash("couldn't kill the session's process — not deleting: "+err.Error(), true)
-			return
+			return false
 		}
 	}
 	status.Remove(paths.StatusDir(), id)
@@ -1403,6 +1440,7 @@ func (m *Model) deleteSession(id string) {
 	m.buildRows()
 	m.reconcileViewport()
 	m.updateTabs()
+	return true
 }
 
 // contextGroup is the group new/imported sessions land in: the group of the
@@ -1452,7 +1490,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
-		m.input.Width = max(10, m.width-6)
+		m.input.Width = max(4, m.width-8)
 		m.search.Width = max(10, m.width-12)
 		return m, nil
 
@@ -1463,6 +1501,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.clearActiveAlert()
 		m.drainCmds()
 		m.reconcileViewport()
+		m.updateBranch()
 		if m.spin%10 == 0 { // every ~3s: cheap (mtime-gated) title sync
 			m.syncNames()
 			m.syncLiveModels()
@@ -1511,21 +1550,24 @@ func (m *Model) updateMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		return m.mousePick(msg)
 	case modeImport:
 		return m.mouseImport(msg)
-	case modeHelp, modeInfo:
-		if msg.Action == tea.MouseActionPress && msg.Button != tea.MouseButtonNone {
-			m.mode = modeNormal
+	case modeHelp, modeInfo, modeConfirm:
+		if msg.Action == tea.MouseActionPress {
+			if msg.Button == tea.MouseButtonWheelDown {
+				m.scroll += 3
+			}
+			if msg.Button == tea.MouseButtonWheelUp {
+				m.scroll = max(0, m.scroll-3)
+			}
 		}
 		return m, nil
+	case modeCommands:
+		return m.mouseCommands(msg)
+
 	default:
 		return m, nil
 	}
-	rowAt := func(y int) int {
-		idx := m.top + y - m.listTopY()
-		if idx < 0 || idx >= len(m.rows) {
-			return -1
-		}
-		return idx
-	}
+	rowAt := m.rowAt
+
 	switch {
 	case msg.Button == tea.MouseButtonWheelUp && msg.Action == tea.MouseActionPress:
 		m.moveSel(-1)
@@ -1543,7 +1585,7 @@ func (m *Model) updateMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		m.pressIdx = idx
 		m.dragID, m.dragGroupID, m.dragMoved = "", "", false
 		r := m.rows[idx]
-		if m.filter != "" {
+		if m.filtersActive() || len(m.marked) > 0 {
 			return m, nil
 		}
 		if r.kind == rowSession {
@@ -1581,6 +1623,10 @@ func (m *Model) updateMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			m.updateTabs()
 		} else if idx := rowAt(msg.Y); idx >= 0 && idx == m.pressIdx {
 			// plain click: activate
+			if len(m.marked) > 0 && m.rows[idx].kind == rowSession {
+				m.toggleMarked()
+				return m, nil
+			}
 			if m.rows[idx].kind == rowGroup {
 				m.toggleGroup(m.rows[idx].id)
 			} else {
@@ -1683,6 +1729,7 @@ func (m *Model) openContextMenu() {
 			pickItem{"open", "open", "↵"},
 			pickItem{"peek", "open, keep focus here", "o"},
 			pickItem{"info", "info", "v"},
+			pickItem{"mark", "select / deselect", "b"},
 			pickItem{"folder", "open its folder", "f"})
 		if agents.Get(s.AgentOf()).ScratchDir(s.SessionID) != "" {
 			m.pickItems = append(m.pickItems, pickItem{"scratch", "open its scratch folder", "F"})
@@ -1694,22 +1741,23 @@ func (m *Model) openContextMenu() {
 			m.pickItems = append(m.pickItems, pickItem{"fork", "fork the conversation", "k"})
 		}
 		if k := m.statusOf(s.ID); k == status.NeedsYou || k == status.Attention {
-			m.pickItems = append(m.pickItems, pickItem{"seen", "clear alert", "c"})
+			m.pickItems = append(m.pickItems, pickItem{"seen", "mark notification seen", "c"})
 		}
 		if s.NamedByUser || s.NameExplicit {
 			m.pickItems = append(m.pickItems, pickItem{"unpin", "use the agent's name", "u"})
 		}
 		if m.isLive(s.ID) {
-			m.pickItems = append(m.pickItems, pickItem{"sleep", "close tab (keep on desk)", "z"})
+			m.pickItems = append(m.pickItems, pickItem{"sleep", "stop session…", "z"})
 		}
 		if s.Archived {
-			m.pickItems = append(m.pickItems, pickItem{"restore", "restore from old", "R"})
+			m.pickItems = append(m.pickItems, pickItem{"restore", "restore from Archived", "R"})
 		} else {
-			m.pickItems = append(m.pickItems, pickItem{"archive", "close → old", "x"})
+			m.pickItems = append(m.pickItems, pickItem{"archive", "archive…", "x"})
 		}
-		m.pickItems = append(m.pickItems, pickItem{"delete", "delete forever", "D"})
+		m.pickItems = append(m.pickItems, pickItem{"delete", "remove from desk…", "D"})
 	}
 	m.pickSel = 0
+	m.pickTop = 0
 	m.mode = modeGroupPick
 }
 
@@ -1717,6 +1765,10 @@ func (m *Model) openContextMenu() {
 func (m *Model) execMenu(action string) tea.Cmd {
 	m.mode = modeNormal
 	id := m.menuRow.id
+	targets := []string{id}
+	if m.marked[id] {
+		targets = m.actionTargets()
+	}
 	switch action {
 	case "open":
 		m.open(id, true)
@@ -1724,6 +1776,9 @@ func (m *Model) execMenu(action string) tea.Cmd {
 		m.open(id, false)
 	case "info":
 		m.openInfo(id)
+	case "mark":
+		m.selectSession(id)
+		m.toggleMarked()
 	case "folder":
 		m.openFolder(id)
 	case "scratch":
@@ -1755,14 +1810,13 @@ func (m *Model) execMenu(action string) tea.Cmd {
 		}
 	case "move":
 		m.openGroupPick(id)
+		m.moveTargets = targets
 	case "fork":
 		m.forkSession(id)
 	case "sleep":
-		m.sleep(id)
-		m.lastClosed = id
+		m.requestSessionAction("stop", targets)
 	case "archive":
-		m.archive(id)
-		m.lastClosed = id
+		m.requestSessionAction("archive", targets)
 	case "restore":
 		if s := m.st.Session(id); s != nil {
 			s.Archived = false
@@ -1770,14 +1824,8 @@ func (m *Model) execMenu(action string) tea.Cmd {
 			m.buildRows()
 		}
 	case "delete":
-		s := m.st.Session(id)
-		if s == nil {
-			return nil
-		}
-		m.confirm(fmt.Sprintf("delete %q forever?", s.Name), func() tea.Cmd {
-			m.deleteSession(id)
-			return nil
-		})
+		m.requestSessionAction("remove", targets)
+
 	case "g-color":
 		m.openColorPick(id)
 	case "g-collapse":
@@ -1807,6 +1855,7 @@ func (m *Model) openColorPick(gid string) {
 		m.pickItems = append(m.pickItems, pickItem{id: fmt.Sprint(i), label: name})
 	}
 	m.pickSel = groupSlot(g.Color)
+	m.pickTop = 0
 	m.mode = modeGroupPick
 }
 
@@ -1857,18 +1906,25 @@ func (m *Model) moveSel(d int) {
 }
 
 func (m *Model) ensureVisible() {
-	ih := m.listInnerHeight()
-	if ih <= 0 {
+	h := m.listRowsHeight()
+	if h <= 0 {
 		return
 	}
 	if m.sel < m.top {
 		m.top = m.sel
 	}
-	if m.sel >= m.top+ih {
-		m.top = m.sel - ih + 1
-	}
 	if m.top < 0 {
 		m.top = 0
+	}
+	for m.top < m.sel {
+		used := 0
+		for i := m.top; i <= m.sel && i < len(m.rows); i++ {
+			used += m.rowHeight(m.rows[i])
+		}
+		if used <= h {
+			break
+		}
+		m.top++
 	}
 }
 
@@ -1899,8 +1955,9 @@ func (m *Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case modeImport:
 		return m.keyImport(msg)
 	case modeHelp, modeInfo:
-		m.mode = modeNormal // any key closes
-		return m, nil
+		return m.keyScroll(msg)
+	case modeCommands:
+		return m.keyCommands(msg)
 	}
 	return m.keyNormal(msg)
 }
@@ -1913,6 +1970,7 @@ func (m *Model) openInfo(id string) {
 	}
 	m.infoTarget = id
 	m.infoGit = gitInfo(s.Dir)
+	m.scroll = 0
 	m.mode = modeInfo
 }
 
@@ -1945,6 +2003,9 @@ func (m *Model) keyNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // inside an agent (via the tmux root bindings) runs the same handler a
 // sidebar keystroke does.
 func (m *Model) keyNormalStr(key string) (tea.Model, tea.Cmd) {
+	if actNeedsSidebar[key] {
+		m.focusSidebar()
+	}
 	switch key {
 	case "ctrl+c": // the escape hatch stays instant
 		if m.dirty {
@@ -1980,6 +2041,10 @@ func (m *Model) keyNormalStr(key string) (tea.Model, tea.Cmd) {
 	// (which is what makes them work INSIDE an agent); these handlers cover
 	// keystrokes injected straight into the pane, tests included.
 	case "alt+1", "alt+2", "alt+3", "alt+4", "alt+5", "alt+6", "alt+7", "alt+8", "alt+9":
+		if m.nthSession(int(key[len(key)-1]-'0')) < 0 && m.filtersActive() {
+			m.clearFilters()
+			m.buildRows()
+		}
 		if idx := m.nthSession(int(key[len(key)-1] - '0')); idx >= 0 {
 			m.sel = idx
 			m.ensureVisible()
@@ -2024,10 +2089,9 @@ func (m *Model) keyNormalStr(key string) (tea.Model, tea.Cmd) {
 
 	case "alt+a":
 		idx := m.nextAlert()
-		if idx < 0 && m.filter != "" {
+		if idx < 0 && m.filtersActive() {
 			// The alerting session may be hidden by the filter: clear it.
-			m.filter = ""
-			m.search.SetValue("")
+			m.clearFilters()
 			m.buildRows()
 			idx = m.nextAlert()
 		}
@@ -2100,6 +2164,7 @@ func (m *Model) keyNormalStr(key string) (tea.Model, tea.Cmd) {
 		}
 
 	case "alt+/":
+		m.search.Placeholder = "name, agent:codex, project:…"
 		m.mode = modeSearch
 		m.search.SetValue("")
 		m.filter = ""
@@ -2107,8 +2172,10 @@ func (m *Model) keyNormalStr(key string) (tea.Model, tea.Cmd) {
 		m.buildRows()
 
 	case "esc":
-		if m.filter != "" {
-			m.filter = ""
+		if len(m.marked) > 0 {
+			m.marked = nil
+		} else {
+			m.clearFilters()
 			m.buildRows()
 		}
 
@@ -2129,6 +2196,7 @@ func (m *Model) keyNormalStr(key string) (tea.Model, tea.Cmd) {
 		m.startInput(modeInputGroup, "new group name", "")
 
 	case "alt+i":
+		m.search.Placeholder = "Search conversations…"
 		m.mode = modeImport
 		m.scanning = true
 		m.importItems = nil
@@ -2168,8 +2236,10 @@ func (m *Model) keyNormalStr(key string) (tea.Model, tea.Cmd) {
 		}
 
 	case "alt+m":
-		if id := m.selectedSessionID(); id != "" {
-			m.openGroupPick(id)
+		ids := m.actionTargets()
+		if len(ids) > 0 {
+			m.openGroupPick(ids[0])
+			m.moveTargets = ids
 		}
 
 	case "alt+J", "shift+down":
@@ -2177,47 +2247,23 @@ func (m *Model) keyNormalStr(key string) (tea.Model, tea.Cmd) {
 	case "alt+K", "shift+up":
 		m.reorder(-1)
 
-	case "alt+z": // z as in the zz badge dormant sessions wear
-		id := m.selectedSessionID()
-		if id == "" || !m.isLive(id) {
-			return m, nil
-		}
-		s := m.st.Session(id)
-		// Always confirmed: closing a tab ends the agent's process, and this
-		// key gets hit by people who believe they are typing into an agent.
-		q := fmt.Sprintf("close %q's tab? it stays on the desk", s.Name)
-		if m.statusOf(id) == status.Working {
-			q = fmt.Sprintf("%q is still working — close its tab anyway?", s.Name)
-		}
-		m.confirm(q, func() tea.Cmd {
-			m.sleep(id)
-			m.lastClosed = id
-			m.flash("closed — u reopens", false)
-			return nil
-		})
-
+	case "alt+z":
+		m.requestSessionAction("stop", m.actionTargets())
 	case "alt+u":
-		id := m.lastClosed
-		s := m.st.Session(id)
-		if id == "" || s == nil {
-			return m, nil
-		}
-		m.lastClosed = ""
-		if s.Archived {
-			m.reviveAndOpen(id, false)
-		} else {
-			m.open(id, false)
-		}
-		m.selectSession(id)
+		m.undoLastAction()
 
 	case "alt+x":
+		if len(m.marked) > 0 {
+			m.requestSessionAction("archive", m.actionTargets())
+			return m, nil
+		}
 		r := m.selectedRow()
 		if r == nil {
 			return m, nil
 		}
 		if r.kind == rowGroup {
 			if r.id == oldSection {
-				m.flash("open the section and delete old sessions one by one", false)
+				m.flash("expand Archived; "+modKey("b")+" selects sessions", false)
 				return m, nil
 			}
 			g := m.st.Group(r.id)
@@ -2230,23 +2276,32 @@ func (m *Model) keyNormalStr(key string) (tea.Model, tea.Cmd) {
 			})
 			return m, nil
 		}
-		s := m.st.Session(r.id)
-		id := r.id
-		if s.Archived {
-			m.confirm(fmt.Sprintf("delete %q forever?", s.Name), func() tea.Cmd {
-				m.deleteSession(id)
-				return nil
-			})
-			return m, nil
+		action := "archive"
+		if m.st.Session(r.id).Archived {
+			action = "remove"
 		}
-		m.confirm(fmt.Sprintf("close %q → old?", s.Name), func() tea.Cmd {
-			m.archive(id)
-			m.lastClosed = id
-			m.flash("shelved — u takes it back", false)
-			return nil
-		})
+		m.requestSessionAction(action, m.actionTargets())
 
+	case "alt+p":
+		m.search.Placeholder = "Search commands…"
+		m.search.SetValue("")
+		m.search.Focus()
+		m.pickSel, m.pickTop = 0, 0
+		m.mode = modeCommands
+	case "alt+A":
+		m.attentionOnly = !m.attentionOnly
+		m.buildRows()
+	case "alt+e":
+		m.openFilters()
+	case "alt+b":
+		m.toggleMarked()
+	case "alt+B":
+		m.selectVisible()
+	case "alt+t":
+		m.st.ShowMetrics = !m.st.ShowMetrics
+		m.dirty = true
 	case "alt+?":
+		m.scroll = 0
 		m.mode = modeHelp
 
 	default:
@@ -2291,15 +2346,26 @@ func (m *Model) reorder(delta int) {
 }
 
 func (m *Model) startInput(mo mode, prompt, initial string) {
+	m.focusSidebar()
+	m.scroll = 0
+	m.inputErr = ""
+	m.inputInitial = initial
+	m.suggestionSel = -1
+	m.suggestions = nil
 	m.mode = mo
 	m.input.Prompt = ""
 	m.input.Placeholder = prompt
 	m.input.SetValue(initial)
 	m.input.CursorEnd()
 	m.input.Focus()
+	if mo == modeInputDir {
+		m.updateSuggestions(true)
+	}
 }
 
 func (m *Model) confirm(msgText string, fn func() tea.Cmd) {
+	m.focusSidebar()
+	m.scroll = 0
 	m.mode = modeConfirm
 	m.confirmMsg = msgText
 	m.confirmFn = fn
@@ -2307,6 +2373,10 @@ func (m *Model) confirm(msgText string, fn func() tea.Cmd) {
 
 func (m *Model) keyConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
+	case "up", "pgup":
+		m.scroll = max(0, m.scroll-3)
+	case "down", "pgdown":
+		m.scroll += 3
 	case "y", "Y":
 		fn := m.confirmFn
 		m.mode = modeNormal
@@ -2356,68 +2426,9 @@ func (m *Model) keySearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m *Model) keyTextInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "esc":
-		m.mode = modeNormal
-		m.input.Blur()
-		m.pickFor = "" // abandon a half-finished move
-		m.wtFlow = false
-		return m, nil
-	case "tab":
-		if m.mode == modeInputDir {
-			m.completePath()
-		}
-		return m, nil
-	case "enter":
-		val := strings.TrimSpace(m.input.Value())
-		return m.submitInput(val)
-	}
-	var cmd tea.Cmd
-	m.input, cmd = m.input.Update(msg)
-	return m, cmd
-}
+func (m *Model) keyTextInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.handleInput(msg) }
 
-// completePath does shell-style tab completion (directories only) inside the
-// new-session directory prompt.
-func (m *Model) completePath() {
-	val := m.input.Value()
-	expanded := expandHome(val)
-	dir, prefix := filepath.Split(expanded)
-	if dir == "" {
-		dir = "."
-	}
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return
-	}
-	var cands []string
-	for _, e := range entries {
-		if !e.IsDir() || strings.HasPrefix(e.Name(), ".") && !strings.HasPrefix(prefix, ".") {
-			continue
-		}
-		if strings.HasPrefix(e.Name(), prefix) {
-			cands = append(cands, e.Name())
-		}
-	}
-	if len(cands) == 0 {
-		return
-	}
-	lcp := cands[0]
-	for _, c := range cands[1:] {
-		for !strings.HasPrefix(c, lcp) {
-			lcp = lcp[:len(lcp)-1]
-		}
-	}
-	completed := filepath.Join(dir, lcp)
-	if len(cands) == 1 {
-		completed += "/"
-	} else {
-		m.flash(fmt.Sprintf("%d matches", len(cands)), false)
-	}
-	m.input.SetValue(completed)
-	m.input.CursorEnd()
-}
+func (m *Model) completePath() { m.completeDirectory() }
 
 func expandHome(v string) string {
 	if v == "~" {
@@ -2456,15 +2467,13 @@ func (m *Model) submitInput(val string) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case modeInputWtName:
-		dir, err := addWorktree(m.wtRepo, val)
-		if err != nil {
-			m.flash(err.Error(), true)
+		if !validWorktreeName(val) {
+			m.flash("Use letters, digits, . _ - /; no spaces or ..", true)
 			return m, nil
 		}
-		m.wtFlow = false
-		m.mode = modeNormal
+		m.wtName = val
 		m.input.Blur()
-		m.pendingDir = dir
+		m.pendingDir = m.wtRepo
 		m.openAgentPick()
 		return m, nil
 
@@ -2474,13 +2483,8 @@ func (m *Model) submitInput(val string) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		gid := m.st.AddGroup(val)
-		if m.pickFor != "" {
-			// "+ new group…" chosen while moving a session: finish the move.
-			m.st.MoveToGroup(m.pickFor, gid)
-			if s := m.st.Session(m.pickFor); s != nil {
-				s.Archived = false
-			}
-			m.pickFor = ""
+		if m.pickFor != "" || len(m.moveTargets) > 0 {
+			m.moveSessions(gid)
 		}
 		m.save()
 		m.mode = modeNormal
@@ -2570,7 +2574,7 @@ var wtNameRe = regexp.MustCompile(`^[A-Za-z0-9._][A-Za-z0-9._/-]{0,80}$`)
 // agents working in the main checkout never see it. A new branch <name> is
 // created from HEAD; if that branch already exists, it is checked out instead.
 func addWorktree(repo, name string) (string, error) {
-	if !wtNameRe.MatchString(name) || strings.Contains(name, "..") {
+	if !validWorktreeName(name) {
 		return "", fmt.Errorf("worktree name: letters, digits, . _ - / only")
 	}
 	base := os.Getenv("AGENTBOSS_WORKTREE_DIR")
@@ -2619,6 +2623,9 @@ func normalizeDir(v string) (string, error) {
 // aren't installed are listed but marked, so the desk explains itself
 // instead of failing at launch.
 func (m *Model) openAgentPick() {
+	m.focusSidebar()
+	m.inputErr = ""
+	m.pickTop = 0
 	m.pickKind = "agent"
 	m.pickItems = m.pickItems[:0]
 	for _, p := range agents.All() {
@@ -2632,6 +2639,7 @@ func (m *Model) openAgentPick() {
 	// default moved with the cursor would make `n <dir> enter enter` create
 	// whichever agent the selected row happened to use.
 	m.pickSel = 0
+	m.pickTop = 0
 	m.mode = modeGroupPick
 }
 
@@ -2639,7 +2647,7 @@ func (m *Model) openAgentPick() {
 func (m *Model) openSortPick() {
 	m.pickKind = "sort"
 	m.pickItems = []pickItem{
-		{id: "manual", label: "manual (J/K, drag)"},
+		{id: "manual", label: "manual (" + modKey("J") + "/" + modKey("K") + ", drag)"},
 		{id: "status", label: "status — alerts first"},
 		{id: "recent", label: "recent activity"},
 		{id: "name", label: "name"},
@@ -2655,11 +2663,15 @@ func (m *Model) openSortPick() {
 			m.pickSel = i
 		}
 	}
+	m.pickTop = 0
 	m.mode = modeGroupPick
 }
 
 // openGroupPick opens the group chooser for moving a session.
 func (m *Model) openGroupPick(forSession string) {
+	m.focusSidebar()
+	m.inputErr = ""
+	m.pickTop = 0
 	m.pickKind = "group"
 	m.pickFor = forSession
 	m.pickItems = m.pickItems[:0]
@@ -2679,22 +2691,47 @@ func (m *Model) openGroupPick(forSession string) {
 			m.pickSel = i
 		}
 	}
+	m.pickTop = 0
 	m.mode = modeGroupPick
 }
 
 func (m *Model) keyGroupPick(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if msg.String() == "alt+down" {
+		m.scroll++
+		return m, nil
+	}
+	if msg.String() == "alt+up" {
+		m.scroll = max(0, m.scroll-1)
+		return m, nil
+	}
+	if (msg.String() == "left" || msg.String() == "shift+tab") && m.pickKind == "agent" {
+		m.backToInput()
+		return m, nil
+	}
+	if m.pickKind == "menu" {
+		for _, it := range m.pickItems {
+			if it.key == msg.String() {
+				return m, m.execMenu(it.id)
+			}
+		}
+	}
 	switch msg.String() {
 	case "esc", "q":
 		m.mode = modeNormal
 		m.pickFor = ""    // abandon a half-finished move
 		m.pendingDir = "" // abandon a half-finished new-session wizard
+		m.wtFlow = false
+		m.moveTargets = nil
+		m.inputErr = ""
 		return m, nil
 	case "up", "k", "ctrl+p":
+		m.scroll = 0
 		if m.pickSel > 0 {
 			m.pickSel--
 		}
 		return m, nil
 	case "down", "j", "ctrl+n":
+		m.scroll = 0
 		if m.pickSel < len(m.pickItems)-1 {
 			m.pickSel++
 		}
@@ -2730,15 +2767,14 @@ func (m *Model) pickEnter() (tea.Model, tea.Cmd) {
 	if m.pickKind == "menu" {
 		return m, m.execMenu(it.id)
 	}
-	if m.pickKind == "agent" {
-		dir := m.pendingDir
-		m.pendingDir = ""
-		m.mode = modeNormal
-		if dir != "" {
-			m.createSession(dir, it.id)
-		}
+	if strings.HasPrefix(m.pickKind, "filter") {
+		m.applyFilter(it.id)
 		return m, nil
 	}
+	if m.pickKind == "agent" {
+		return m.finishSession(it.id)
+	}
+
 	if m.pickKind == "color" {
 		if g := m.st.Group(m.pickFor); g != nil {
 			fmt.Sscanf(it.id, "%d", &g.Color)
@@ -2766,14 +2802,7 @@ func (m *Model) pickEnter() (tea.Model, tea.Cmd) {
 		m.startInput(modeInputGroup, "new group name", "")
 		return m, nil
 	}
-	m.st.MoveToGroup(m.pickFor, it.id)
-	if s := m.st.Session(m.pickFor); s != nil {
-		s.Archived = false // moving an old session revives its entry
-	}
-	if g := m.st.Group(it.id); g != nil {
-		g.Collapsed = false
-	}
-	m.pickFor = ""
+	m.moveSessions(it.id)
 	m.save()
 	m.mode = modeNormal
 	m.buildRows()
@@ -2805,7 +2834,7 @@ func (m *Model) mousePick(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		// box: border, title, blank, items…, blank, hint, border
-		if idx := msg.Y - top - 3; idx >= 0 && idx < len(m.pickItems) {
+		if idx := m.pickTop + msg.Y - top - 3 + m.scroll; msg.Y >= top+max(1, 3-m.scroll) && msg.Y < top+3+m.pickerVisible()-m.scroll && idx >= 0 && idx < len(m.pickItems) {
 			m.pickSel = idx
 			return m.pickEnter()
 		}
@@ -2904,6 +2933,7 @@ func (m *Model) importConversation(c agents.Conversation) {
 	}
 	s.SessionID = c.SessionID
 	m.save()
+	m.clearFilters()
 	m.buildRows()
 	m.selectSession(id)
 	m.open(id, true)

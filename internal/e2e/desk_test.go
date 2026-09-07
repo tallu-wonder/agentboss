@@ -184,8 +184,134 @@ type deskState struct {
 		Name     string `json:"name"`
 		Dir      string `json:"dir"`
 		Archived bool   `json:"archived"`
+		GroupID  string `json:"group_id"`
 	} `json:"sessions"`
 	NotifyMuted bool `json:"notify_muted"`
+}
+
+func TestBlockingRequestSurvivesViewing(t *testing.T) {
+	d := newDesk(t)
+	blocked := d.newSession("blocked")
+	d.keys("C-\\")
+	d.newSession("other")
+	d.keys("C-\\")
+	d.hook(blocked, `{"hook_event_name":"Notification","message":"needs permission to use Bash"}`)
+	d.waitFor("blocked status", func() bool { return strings.Contains(d.sidebar(), "needs you") })
+	d.keys("M-a")
+	d.waitFor("the request to be seen", func() bool {
+		data, _ := os.ReadFile(filepath.Join(d.home, "state.json"))
+		return strings.Contains(string(data), "seen_at")
+	})
+	data, err := os.ReadFile(filepath.Join(d.home, "status", blocked+".json"))
+	if err != nil || !strings.Contains(string(data), `"status":"needs_you"`) {
+		t.Fatalf("viewing changed the request: %s (%v)", data, err)
+	}
+	d.keys("M-A")
+	d.waitFor("attention reason", func() bool { return strings.Contains(d.sidebar(), "Permission:") })
+	d.hook(blocked, `{"hook_event_name":"PreToolUse"}`)
+	d.waitFor("resolved attention queue", func() bool { return strings.Contains(d.sidebar(), "Nothing needs attention") })
+}
+
+func TestFormFeedbackPaletteAndHelp(t *testing.T) {
+	d := newDesk(t)
+	d.keys("M-n", "C-u")
+	d.literal(filepath.Join(d.dir, "missing"))
+	d.keys("Enter")
+	d.waitFor("visible validation", func() bool { return strings.Contains(d.sidebar(), "no such directory") })
+	d.keys("Escape")
+	d.newSession("form-test")
+	d.keys("C-\\")
+	repo := filepath.Join(d.dir, "work", "repo")
+	if err := os.MkdirAll(repo, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := exec.Command("git", "init", "-q", repo).CombinedOutput(); err != nil {
+		t.Fatalf("git init: %s %v", out, err)
+	}
+	d.keys("M-W", "C-u")
+	d.literal(repo)
+	d.keys("Enter")
+	d.literal("visible-branch")
+	d.waitFor("visible worktree name", func() bool { return strings.Contains(d.sidebar(), "visible-branch") })
+	d.keys("BTab")
+	d.waitFor("back to repository", func() bool { return strings.Contains(d.sidebar(), "Repository") })
+	d.keys("Escape", "M-p")
+	d.literal("archive")
+	d.keys("Enter")
+	d.waitFor("palette action confirmation", func() bool { return strings.Contains(d.sidebar(), "Archive session?") })
+	d.keys("n")
+	if _, err := d.tmux("resize-window", "-t", "agentboss:", "-x", "100", "-y", "24"); err != nil {
+		t.Fatal(err)
+	}
+	d.keys("M-?", "Down", "End")
+	d.waitFor("end of help", func() bool { return strings.Contains(d.sidebar(), "Ctrl+Q") })
+	d.keys("Escape")
+}
+
+func TestBatchActionsAndMouseStopConfirmation(t *testing.T) {
+	d := newDesk(t)
+	first := d.newSession("batch-one")
+	d.keys("C-\\")
+	d.newSession("batch-two")
+	d.keys("C-\\", "Home", "M-b", "Down", "M-b")
+	d.keys("M-m", "Down", "Enter")
+	d.literal("batch-group")
+	d.keys("Enter")
+	d.waitFor("batch move", func() bool {
+		s := d.state().Sessions
+		return len(s) == 2 && s[0].GroupID != "" && s[0].GroupID == s[1].GroupID
+	})
+	d.keys("M-B", "M-x")
+	d.waitFor("batch confirmation", func() bool { return strings.Contains(d.sidebar(), "Archive 2 sessions?") })
+	d.keys("n")
+	if len(d.liveSessions()) != 2 {
+		t.Fatal("canceling stopped an agent")
+	}
+	d.keys("M-x", "y")
+	d.waitFor("batch archive", func() bool {
+		if len(d.liveSessions()) != 0 {
+			return false
+		}
+		for _, s := range d.state().Sessions {
+			if !s.Archived {
+				return false
+			}
+		}
+		return true
+	})
+	d.keys("M-u")
+	d.waitFor("batch undo", func() bool { return len(d.liveSessions()) == 2 })
+	cmd := exec.Command(d.bin, "_tabclose", first)
+	cmd.Env = append(os.Environ(), "AGENTBOSS_HOME="+d.home, "TMUX_TMPDIR="+d.socket)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("tab stop: %s %v", out, err)
+	}
+	d.waitFor("middle-click confirmation", func() bool { return strings.Contains(d.sidebar(), "Stop session?") })
+	if len(d.liveSessions()) != 2 {
+		t.Fatal("middle-click stopped an agent without confirmation")
+	}
+	d.keys("n")
+}
+
+func TestTabNumbersFollowSortingAcrossFilters(t *testing.T) {
+	d := newDesk(t)
+	d.newSession("zebra")
+	d.keys("C-\\")
+	alpha := d.newSession("alpha")
+	d.keys("C-\\")
+	d.keys("M-s", "Down", "Down", "Down", "Enter") // sort by name
+	d.keys("M-/")
+	d.literal("zebra")
+	d.keys("Enter") // alpha is hidden
+	cmd := exec.Command(d.bin, "_tab", "n1")
+	cmd.Env = append(os.Environ(), "AGENTBOSS_HOME="+d.home, "TMUX_TMPDIR="+d.socket)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("tab navigation: %s %v", out, err)
+	}
+	d.waitFor("first sorted tab", func() bool {
+		out, _ := d.tmux("list-clients", "-F", "#{session_name}")
+		return strings.Contains(out, "adk_"+alpha)
+	})
 }
 
 func (d *desk) state() deskState {
@@ -321,7 +447,7 @@ func TestShelvedSessionAsksBeforeWaking(t *testing.T) {
 	d.keys("Home")
 	d.keys("M-x") // close → old
 	d.waitFor("the confirmation to appear", func() bool {
-		return strings.Contains(d.sidebar(), "old?")
+		return strings.Contains(d.sidebar(), "Archive session?")
 	})
 	d.keys("y")
 	d.waitFor("it to land on the shelf", func() bool {
@@ -347,7 +473,7 @@ func TestShelvedSessionAsksBeforeWaking(t *testing.T) {
 	// Opening it asks rather than waking it.
 	d.keys("End")
 	d.keys("Enter")
-	d.waitFor("the revive prompt", func() bool { return strings.Contains(d.sidebar(), "revive") })
+	d.waitFor("the revive prompt", func() bool { return strings.Contains(d.sidebar(), "Restore and resume?") })
 	d.keys("M-n")
 	time.Sleep(700 * time.Millisecond)
 	if len(d.liveSessions()) != 0 {
@@ -361,7 +487,7 @@ func TestShelvedSessionAsksBeforeWaking(t *testing.T) {
 
 	// Saying yes revives it.
 	d.keys("Enter")
-	d.waitFor("the revive prompt again", func() bool { return strings.Contains(d.sidebar(), "revive") })
+	d.waitFor("the revive prompt again", func() bool { return strings.Contains(d.sidebar(), "Restore and resume?") })
 	d.keys("y")
 	d.waitFor("the session to come back", func() bool { return len(d.liveSessions()) == 1 })
 }
@@ -376,7 +502,7 @@ func TestConfirmationIsAPopup(t *testing.T) {
 	d.keys("M-x")
 	d.waitFor("the confirmation box", func() bool {
 		s := d.sidebar()
-		return strings.Contains(s, "╭") && strings.Contains(s, "old?") && strings.Contains(s, "y confirm")
+		return strings.Contains(s, "╭") && strings.Contains(s, "Archive session?") && strings.Contains(s, "y confirm")
 	})
 	d.keys("M-n")
 }
@@ -742,7 +868,7 @@ func TestActionChordsWorkFromInsideAnAgent(t *testing.T) {
 		t.Fatal(err)
 	}
 	d.waitFor("the confirm popup to appear", func() bool {
-		return strings.Contains(d.sidebar(), "close \"close-me\"'s tab?")
+		return strings.Contains(d.sidebar(), "Stop session?")
 	})
 	// Focus must have come to the sidebar, or y would go to the agent.
 	out, _ = d.tmux("list-panes", "-t", "agentboss:", "-F", "#{pane_active} #{@agentboss_role}")

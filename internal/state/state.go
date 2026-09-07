@@ -40,6 +40,8 @@ type Session struct {
 	SessionID    string    `json:"session_id,omitempty"`
 	CreatedAt    time.Time `json:"created_at"`
 	LastOpenedAt time.Time `json:"last_opened_at,omitempty"`
+	// SeenAt acknowledges notifications without changing the agent's state.
+	SeenAt time.Time `json:"seen_at,omitempty"`
 	// NamedByUser marks a name the user chose explicitly (via rename).
 	// Auto-derived names (folder, import title) keep syncing to the Claude
 	// conversation's own title until the user renames.
@@ -67,6 +69,7 @@ type State struct {
 	// OldExpanded remembers whether the archived-sessions section is open.
 	NotifyMuted bool `json:"notify_muted,omitempty"` // desktop alerts silenced by the user
 	OldExpanded bool `json:"old_expanded,omitempty"`
+	ShowMetrics bool `json:"show_metrics,omitempty"`
 }
 
 // TmuxName is the tmux session name backing a agentboss session.

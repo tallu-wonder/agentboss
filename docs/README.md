@@ -1,6 +1,6 @@
 # docs
 
-`desk.svg`, `info.svg` and `keys.svg` are the screenshots in the top-level
+`desk.svg`, `info.svg`, `keys.svg`, `commands.svg` and `attention.svg` are the screenshots in the top-level
 README. They are not mock-ups: each is a capture of a real agentboss session,
 taken with `tmux capture-pane -p -e` and rendered by `ansi2svg.py`, which turns
 ANSI colour into one `<text>` run per style — pinned to its column with

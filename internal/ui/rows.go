@@ -37,7 +37,7 @@ func (m *Model) buildRows() {
 		prevKind = m.rows[m.sel].kind
 	}
 
-	filter := strings.TrimSpace(m.filter)
+	filtering := m.filtersActive()
 	m.rows = m.rows[:0]
 
 	groupName := map[string]string{}
@@ -50,7 +50,7 @@ func (m *Model) buildRows() {
 		var matched []string
 		for _, sid := range members {
 			s := m.st.Session(sid)
-			if filter == "" || fuzzyMatch(filter, s.Name, s.Dir+" "+groupName[gid]) {
+			if m.matchesSession(s, groupName[gid]) {
 				matched = append(matched, sid)
 			}
 		}
@@ -62,11 +62,11 @@ func (m *Model) buildRows() {
 			return
 		}
 		g := m.st.Group(gid)
-		if filter != "" && len(matched) == 0 {
+		if filtering && len(matched) == 0 {
 			return // hide empty groups while searching
 		}
 		m.rows = append(m.rows, row{rowGroup, gid})
-		if g.Collapsed && filter == "" {
+		if g.Collapsed && !filtering {
 			return
 		}
 		for _, sid := range matched {
@@ -74,31 +74,50 @@ func (m *Model) buildRows() {
 		}
 	}
 
-	appendGroup("")
-	for _, g := range m.st.Groups {
-		appendGroup(g.ID)
-	}
-
-	// Archived sessions live in the "old" section at the bottom.
-	old := m.archivedIDs()
-	if len(old) > 0 {
-		var matched []string
-		for _, sid := range old {
-			s := m.st.Session(sid)
-			if filter == "" || fuzzyMatch(filter, s.Name, s.Dir+" old") {
-				matched = append(matched, sid)
+	if m.attentionOnly {
+		var ids []string
+		for _, session := range m.st.Sessions {
+			if m.matchesSession(&session, groupName[session.GroupID]) {
+				ids = append(ids, session.ID)
 			}
 		}
-		if filter == "" || len(matched) > 0 {
-			m.rows = append(m.rows, row{rowGroup, oldSection})
-			if m.st.OldExpanded || filter != "" {
-				for _, sid := range matched {
-					m.rows = append(m.rows, row{rowSession, sid})
+		sort.SliceStable(ids, func(i, j int) bool {
+			a, b := statusRank(m.statusOf(ids[i])), statusRank(m.statusOf(ids[j]))
+			if a != b {
+				return a < b
+			}
+			return m.runtime[ids[i]].UpdatedAt.Before(m.runtime[ids[j]].UpdatedAt)
+		})
+		for _, id := range ids {
+			m.rows = append(m.rows, row{rowSession, id})
+		}
+	} else {
+		appendGroup("")
+		for _, g := range m.st.Groups {
+			appendGroup(g.ID)
+		}
+
+		// Archived sessions live in the "old" section at the bottom.
+		old := m.archivedIDs()
+		if len(old) > 0 {
+			var matched []string
+			for _, sid := range old {
+				s := m.st.Session(sid)
+				if m.matchesSession(s, "Archived old") {
+					matched = append(matched, sid)
+				}
+			}
+			if !filtering || len(matched) > 0 {
+				m.rows = append(m.rows, row{rowGroup, oldSection})
+				if m.st.OldExpanded || filtering {
+					for _, sid := range matched {
+						m.rows = append(m.rows, row{rowSession, sid})
+					}
 				}
 			}
 		}
-	}
 
+	}
 	// Restore selection on the same item if it is still visible.
 	m.sel = -1
 	for i, r := range m.rows {
@@ -280,14 +299,28 @@ func (m *Model) selectedSessionID() string {
 // on dormant sessions, so the shortcuts drifted out of step with the tabs as
 // soon as anything was asleep, and pressing a digit could wake a session you
 // were not thinking about.
+// numberedLive is independent of search and attention filters, so number
+// badges keep addressing the same open tabs while the visible list changes.
+func (m *Model) numberedLive() []string {
+	var ids []string
+	for _, id := range m.orderedLive() {
+		session := m.st.Session(id)
+		if g := m.st.Group(session.GroupID); g != nil && g.Collapsed {
+			continue
+		}
+		ids = append(ids, id)
+	}
+	return ids
+}
+
 func (m *Model) nthSession(n int) int {
-	count := 0
+	ids := m.numberedLive()
+	if n < 1 || n > len(ids) {
+		return -1
+	}
 	for i, r := range m.rows {
-		if r.kind == rowSession && m.isLive(r.id) {
-			count++
-			if count == n {
-				return i
-			}
+		if r.kind == rowSession && r.id == ids[n-1] {
+			return i
 		}
 	}
 	return -1

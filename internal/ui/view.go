@@ -3,13 +3,13 @@ package ui
 import (
 	"fmt"
 	"os"
-	"runtime"
 	"strings"
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/tallu-wonder/agentboss/internal/keymap"
 	"github.com/tallu-wonder/agentboss/internal/state"
 	"github.com/tallu-wonder/agentboss/internal/status"
 )
@@ -19,23 +19,14 @@ var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "�
 // optName is what this platform calls the Alt modifier — the key legend must
 // name the key on the user's keyboard, not tmux's name for it.
 func optName() string {
-	if runtime.GOOS == "darwin" {
+	if strings.HasPrefix(keymap.Display("n"), "⌥") {
 		return "opt"
 	}
 	return "alt"
 }
 
-// modKey renders a chord for the key legend: compact ⌥ on macOS, spelled out
-// elsewhere.
-func modKey(k string) string {
-	if runtime.GOOS == "darwin" {
-		return "⌥" + k
-	}
-	return "alt+" + k
-}
+func modKey(k string) string { return keymap.Display(k) }
 
-// groupPalette maps a group's color slot to matching terminal colors for
-// the sidebar (lipgloss) and the tab bar (tmux formats).
 var groupPalette = []struct {
 	lip  lipgloss.Color
 	tmux string
@@ -69,8 +60,8 @@ var (
 	cWorking = lipgloss.Color("14")  // bright cyan
 	cAlert   = lipgloss.Color("203") // red-ish: needs you
 	cNew     = lipgloss.Color("221") // yellow: finished, unseen
-	cDim     = lipgloss.Color("242")
-	cFaint   = lipgloss.Color("238")
+	cDim     = lipgloss.Color("247")
+	cFaint   = lipgloss.Color("244")
 	cText    = lipgloss.Color("252")
 	cSelBg   = lipgloss.Color("237")
 
@@ -93,9 +84,9 @@ var (
 // ---- layout metrics ------------------------------------------------------
 
 // listTopY is the first screen row of list content (header + rule above).
-func (m *Model) listTopY() int { return 2 }
+func (m *Model) listTopY() int { return 3 }
 
-func (m *Model) listInnerHeight() int { return m.height - 3 } // header, rule, footer
+func (m *Model) listInnerHeight() int { return max(0, m.height-4) } // header, rule, footer
 
 // ---- helpers ---------------------------------------------------------
 
@@ -176,13 +167,13 @@ func (m *Model) statusGlyph(k status.Kind) (string, lipgloss.Style) {
 // ---- top-level view --------------------------------------------------
 
 func (m *Model) View() string {
-	if m.width < 16 || m.height < 6 {
-		return "pane too small"
+	if m.width < 16 || m.height < 10 {
+		return "Resize pane: at least 16 columns × 10 rows"
 	}
 	var body string
 	switch m.mode {
 	case modeHelp:
-		body = m.viewHelp()
+		body = m.overlay(m.viewHelp())
 	case modeInfo:
 		body = m.overlay(m.viewInfo())
 	case modeGroupPick:
@@ -191,17 +182,21 @@ func (m *Model) View() string {
 		body = m.overlay(m.viewConfirm())
 	case modeImport:
 		body = m.viewImport()
+	case modeCommands:
+		body = m.viewCommands()
+	case modeInputDir, modeInputWtName, modeInputGroup, modeRename:
+		body = m.overlay(m.viewInput())
 	default:
 		body = m.viewList()
 	}
 	return m.viewHeader() + "\n" +
-		stFaint.Render(strings.Repeat("─", m.width)) + "\n" +
+		m.viewFocus() + "\n" + m.viewFilterBar() + "\n" +
 		body + "\n" +
 		m.viewFooter()
 }
 
 // overlay floats a box over the session list rather than replacing it — a
-// confirm for "delete forever?" must not hide the very row it is about.
+// confirmation for "remove from desk?" must not hide the very row it is about.
 func (m *Model) overlay(box string) string {
 	// Clamp the box to the pane so a small window never smears the frame.
 	lines := strings.Split(box, "\n")
@@ -240,76 +235,54 @@ func (m *Model) overlay(box string) string {
 
 func (m *Model) viewHeader() string {
 	working, needs, attn := m.counts()
-	title := stHeader.Render("agentboss")
-	if m.unfocused {
-		// Keys are going to the agent right now; a dimmed title is the cue.
-		title = stDim.Render("agentboss")
-	}
-	left := " " + title + " "
-	parts := []string{}
+	left := " " + stHeader.Render("agentboss")
 	if working > 0 {
-		parts = append(parts, stWorking.Render(fmt.Sprintf("%s%d", spinnerFrames[m.spin%len(spinnerFrames)], working)))
+		left += stWorking.Render(fmt.Sprintf(" ⠙%d", working))
 	}
 	if needs > 0 {
-		parts = append(parts, stAlert.Render(fmt.Sprintf("◆%d", needs)))
+		left += stAlert.Render(fmt.Sprintf(" ◆%d", needs))
 	}
 	if attn > 0 {
-		parts = append(parts, stNew.Render(fmt.Sprintf("●%d", attn)))
+		left += stNew.Render(fmt.Sprintf(" ●%d", attn))
 	}
-	mid := strings.Join(parts, " ")
-	right := stDim.Render("? ")
 	if m.st.NotifyMuted {
-		// Silenced alerts must be visible somewhere, or a quiet desk looks broken.
-		right = stDim.Render("🔇 ") + right
+		left += stDim.Render(" muted")
 	}
-	if m.filter != "" && m.mode == modeNormal {
-		shown, total := m.matchCount()
-		right = stNotice.Render("⌕"+m.filter) +
-			stDim.Render(fmt.Sprintf(" %d/%d ", shown, total)) + right
+	right := stDim.Render(modKey("p") + " commands ")
+	if ansi.StringWidth(left+right)+1 > m.width {
+		right = stDim.Render(modKey("p") + " ")
 	}
-	gap := m.width - ansi.StringWidth(left+mid) - ansi.StringWidth(right)
-	if gap < 1 {
-		return pad(left+mid, m.width)
-	}
-	return left + mid + strings.Repeat(" ", gap) + right
+	return pad(left, max(0, m.width-ansi.StringWidth(right))) + right
 }
 
 func (m *Model) viewFooter() string {
-	var s string
-	switch m.mode {
-	case modeSearch:
-		s = " " + stHeader.Render("/") + m.search.View()
-		// No count until a query exists: with nothing typed, collapsed groups
-		// keep sessions out of the rows and the number would read as broken.
-		if strings.TrimSpace(m.filter) != "" {
-			shown, total := m.matchCount()
-			s += stDim.Render(fmt.Sprintf(" %d/%d", shown, total))
+	var text string
+	switch {
+	case m.mode == modeSearch:
+		shown, total := m.matchCount()
+		text = " /" + m.search.View() + fmt.Sprintf(" %d/%d", shown, total)
+	case m.inputMode():
+		text = " " + stDim.Render("Enter next · Esc cancel")
+	case m.mode == modeHelp || m.mode == modeInfo:
+		text = " " + stDim.Render("↑↓ / PgUp PgDn scroll · Esc close")
+	case m.mode == modeConfirm || m.mode == modeGroupPick || m.mode == modeCommands:
+		text = ""
+	case m.mode == modeImport:
+		text = " " + stDim.Render("Enter add · Esc cancel")
+	case m.notice != "":
+		style := stNotice
+		if m.noticeErr {
+			style = stErr
 		}
-	case modeInputDir, modeInputGroup, modeRename:
-		s = " " + m.inputLabel() + " " + m.input.View()
-	case modeConfirm:
-		s = "" // the popup itself says y/n; a second copy just pulls the eye
-	case modeImport:
-		s = " " + stDim.Render("enter add · esc cancel")
+		text = " " + style.Render(m.notice)
+	case m.unfocused:
+		text = " " + stDim.Render(fitHints(m.width-2, "Ctrl+\\ sidebar", modKey("p")+" commands"))
 	default:
-		switch {
-		case m.notice != "":
-			st := stNotice
-			if m.noticeErr {
-				st = stErr
-			}
-			s = " " + st.Render(m.notice)
-		case m.unfocused:
-			s = " " + stDim.Render(fitHints(m.width-2, "keys go to the agent", "ctrl+\\ returns"))
-		default:
-			s = " " + stDim.Render(fitHints(m.width-2, m.footerHints()...))
-		}
+		text = " " + stDim.Render(fitHints(m.width-2, m.footerHints()...))
 	}
-	return pad(s, m.width)
+	return pad(text, m.width)
 }
 
-// matchCount is how many sessions the active filter lets through, out of all
-// sessions on the desk (old shelf included — the filter searches it too).
 func (m *Model) matchCount() (shown, total int) {
 	for _, r := range m.rows {
 		if r.kind == rowSession {
@@ -323,25 +296,16 @@ func (m *Model) matchCount() (shown, total int) {
 // answers to different keys than a session, and an old session's enter means
 // something you should know about before pressing it.
 func (m *Model) footerHints() []string {
-	r := m.selectedRow()
-	help := modKey("?") + " keys"
-	switch {
-	case r != nil && r.kind == rowGroup && r.id == oldSection:
-		return []string{"↵ open the shelf", help}
-	case r != nil && r.kind == rowGroup:
-		return []string{"↵ collapse", modKey("r") + " rename", modKey("c") + " color", help}
-	case r != nil:
-		if s := m.st.Session(r.id); s != nil && s.Archived {
-			return []string{"↵ revive", modKey("x") + " delete", modKey("m") + " regroup", help}
-		}
+	if len(m.marked) > 0 {
+		return []string{fmt.Sprintf("%d selected", len(m.marked)), modKey("m") + " move", modKey("x") + " archive", "Esc clear"}
 	}
-	return []string{"↵ open", modKey("n") + " new", modKey("i") + " import",
-		modKey("/") + " find", modKey("s") + " sort", help}
+	r := m.selectedRow()
+	if r != nil && r.kind == rowGroup {
+		return []string{"↵ fold", modKey("r") + " rename", modKey("p") + " commands"}
+	}
+	return []string{"↵ open", modKey("n") + " new", modKey("b") + " select", modKey("p") + " commands"}
 }
 
-// fitHints joins hint segments with separators, dropping middle segments that
-// would not fit — the footer never shows a chopped word. The LAST segment is
-// kept whatever happens: it is "? keys", the door to all the others.
 func fitHints(w int, parts ...string) string {
 	if len(parts) == 0 {
 		return ""
@@ -367,94 +331,56 @@ func fitHints(w int, parts ...string) string {
 	return out + " · " + last
 }
 
-// inputLabel is the footer prompt's label, styled.
-func (m *Model) inputLabel() string {
-	switch m.mode {
-	case modeInputDir:
-		if m.wtFlow {
-			return stHeader.Render("repo:")
-		}
-		// The new session lands in the selected row's group — silently, unless
-		// it is said here, where the choice is still one esc away.
-		if g := m.st.Group(m.contextGroup()); g != nil {
-			return stHeader.Render("dir → ") +
-				lipgloss.NewStyle().Foreground(groupLip(g.Color)).Render(truncRunes(g.Name, 14)) +
-				stHeader.Render(":")
-		}
-		return stHeader.Render("dir:")
-	case modeInputWtName:
-		return stHeader.Render("worktree:")
-	case modeInputGroup:
-		return stHeader.Render("group:")
-	case modeRename:
-		return stHeader.Render("name:")
-	}
-	return stHeader.Render(">")
-}
-
-// ---- list ------------------------------------------------------------
-
 func (m *Model) viewList() string {
-	iw := m.width
-	ih := m.listInnerHeight()
-	lines := make([]string, 0, ih)
-
+	h := m.listRowsHeight()
+	var lines []string
 	if len(m.rows) == 0 {
-		empty := []string{
-			"",
-			stDim.Render("  nothing on the desk yet"),
-			"",
-			"  " + stHeader.Render("n") + stText.Render(" start a new session"),
-			"  " + stHeader.Render("i") + stText.Render(" add a past conversation"),
+		if m.filtersActive() {
+			text := "No sessions match these filters"
+			if m.attentionOnly {
+				text = "Nothing needs attention"
+			}
+			lines = []string{"", stDim.Render("  " + text), "", "  Esc clears filters"}
+		} else {
+			lines = []string{"", stText.Render("  Nothing on the desk yet"), "", "  " + keymap.Hint("n", "start a new session"), "  " + keymap.Hint("i", "import a conversation"), "  " + keymap.Hint("p", "browse commands")}
 		}
-		if m.filter != "" {
-			empty = []string{"", stDim.Render("  no match for “" + m.filter + "”")}
-		}
-		lines = append(lines, empty...)
 	}
-
+	nums := map[string]int{}
+	for n, id := range m.numberedLive() {
+		if n < 9 {
+			nums[id] = n + 1
+		}
+	}
 	if m.top >= len(m.rows) {
 		m.top = 0
 	}
-	end := m.top + ih
-	if end > len(m.rows) {
-		end = len(m.rows)
-	}
-
-	// Number badges count OPEN sessions from the very top, not the scroll
-	// window, so a digit always means the same thing as the n-th tab.
-	numFor := map[int]int{}
-	sessionIndex := 0
-	for i, r := range m.rows {
-		if r.kind == rowSession && m.isLive(r.id) {
-			sessionIndex++
-			if sessionIndex <= 9 {
-				numFor[i] = sessionIndex
-			}
-		}
-	}
-
-	for i := m.top; i < end; i++ {
+	for i := m.top; i < len(m.rows); i++ {
 		r := m.rows[i]
-		var line string
+		if len(lines)+m.rowHeight(r) > h {
+			break
+		}
+		line := ""
 		if r.kind == rowGroup {
-			line = m.renderGroupRow(r.id, iw)
+			line = m.renderGroupRow(r.id, m.width)
 		} else {
-			line = m.renderSessionRow(r.id, numFor[i], iw)
+			line = m.renderSessionRow(r.id, nums[r.id], m.width)
 		}
 		if i == m.sel {
-			line = stSelected.Render(pad(line, iw))
+			line = stSelected.Render(pad(line, m.width))
 		}
 		lines = append(lines, line)
+		if m.rowHeight(r) > 1 {
+			lines = append(lines, m.attentionReason(r.id))
+		}
 	}
-	for len(lines) < ih {
+	for len(lines) < h {
 		lines = append(lines, "")
 	}
-	lines = lines[:ih]
-	for i := range lines {
-		lines[i] = pad(lines[i], iw)
+	lines = lines[:h]
+	if m.height >= 16 {
+		lines = append(lines, m.selectedDetails()...)
 	}
-	return strings.Join(lines, "\n")
+	return fitLines(lines, m.width, m.listInnerHeight())
 }
 
 func (m *Model) renderGroupRow(gid string, w int) string {
@@ -464,7 +390,7 @@ func (m *Model) renderGroupRow(gid string, w int) string {
 			arrow = "▾"
 		}
 		n := len(m.archivedIDs())
-		return stFaint.Render(" "+arrow+" ") + stDormant.Render("old") + stFaint.Render(fmt.Sprintf(" %d", n))
+		return stFaint.Render(" "+arrow+" ") + stDormant.Render("Archived") + stFaint.Render(fmt.Sprintf(" %d", n))
 	}
 	g := m.st.Group(gid)
 	if g == nil {
@@ -498,84 +424,56 @@ func (m *Model) renderSessionRow(id string, num, w int) string {
 		return ""
 	}
 	k := m.statusOf(id)
-	icon, ist := m.statusGlyph(k)
-
-	// active-in-viewport marker
-	activeMark := " "
+	icon, style := m.statusGlyph(k)
+	cursor, active, mark := " ", " ", ""
+	if id == m.selectedSessionID() {
+		cursor = "›"
+	}
 	if id == m.activeID {
-		activeMark = stActive.Render("▎")
+		active = stActive.Render("▎")
 	}
-	numStr := "  "
+	if len(m.marked) > 0 {
+		mark = "· "
+		if m.marked[id] {
+			mark = stNotice.Render("✓ ")
+		}
+	}
+	number := "  "
 	if num > 0 {
-		numStr = stDim.Render(fmt.Sprintf("%d ", num))
+		number = stDim.Render(fmt.Sprintf("%d ", num))
 	}
-	indent := ""
-	if s.Archived {
-		indent = stFaint.Render("▏") + " "
-	} else if g := m.st.Group(s.GroupID); g != nil {
-		// colored rail ties member rows to their group, Chrome-style
-		indent = lipgloss.NewStyle().Foreground(groupLip(g.Color)).Render("▏") + " "
+	left := cursor + active + mark + number + style.Render(icon) + " "
+	if g := m.st.Group(s.GroupID); g != nil {
+		left = cursor + active + lipgloss.NewStyle().Foreground(groupLip(g.Color)).Render("│") + mark + number + style.Render(icon) + " "
 	}
-
+	label := map[status.Kind]string{status.Working: "working", status.NeedsYou: "needs you", status.Attention: "new", status.Idle: "idle", status.Dormant: "stopped"}[k]
+	right := style.Render(label)
+	if m.st.ShowMetrics && w >= 65 {
+		var metrics []string
+		if ctx := m.contextLabel(id); ctx != "" {
+			metrics = append(metrics, ctx)
+		}
+		if cost := m.costOf(id); cost >= .01 {
+			metrics = append(metrics, "est "+fmtUSD(cost))
+		}
+		if len(metrics) > 0 {
+			right = stDim.Render(strings.Join(metrics, " · ")) + " " + right
+		}
+	}
+	if w >= 90 {
+		right = stDim.Render(shortProject(s.Dir)) + " · " + right
+	}
+	avail := w - ansi.StringWidth(left+right) - 1
 	nameStyle := stText
-	switch k {
-	case status.NeedsYou:
-		nameStyle = stAlert
-	case status.Attention:
-		nameStyle = stNew
-	case status.Dormant:
+	if k == status.NeedsYou || k == status.Attention {
+		nameStyle = style
+	}
+	if k == status.Dormant {
 		nameStyle = stDormant
 	}
-
-	// The right-hand side is a set of fixed-width columns. Each one holds its
-	// width even when it has no value, so rows line up across agents (Codex
-	// reports no cost) and across a session's life (no model until the first
-	// turn). Numbers are right-aligned so magnitudes compare down the column.
-	var cols []string
-	if m.width >= 46 {
-		cell := blank(costW)
-		if c := m.costOf(id); c >= 0.01 {
-			cell = stFaint.Render(padNum(fmtUSD(c), costW))
-		}
-		cols = append(cols, cell)
-	}
-	family := m.familyOf(id)
-	if m.width >= 40 {
-		cell := blank(modelW)
-		if family != "" {
-			cell = familyStyle(family).Render(pad(family, modelW))
-		}
-		cols = append(cols, cell)
-	}
-	if m.width >= 30 {
-		cell := blank(tokenW)
-		if tok := m.tokensOf(id); tok > 0 {
-			cell = tokenStyle(tok, m.contextWindowOf(id)).Render(padNum(fmtTokens(tok), tokenW))
-		}
-		cols = append(cols, cell)
-	}
-
-	var age string
-	switch k {
-	case status.NeedsYou:
-		age = stAlert.Render(padNum("!", ageW))
-	case status.Attention:
-		age = stNew.Render(padNum("new", ageW))
-	case status.Working:
-		age = stWorking.Render(padNum(ago(m.runtime[id].UpdatedAt), ageW))
-	case status.Dormant:
-		age = stDormant.Render(padNum("zz", ageW))
-	default:
-		age = stDim.Render(padNum(ago(m.runtime[id].UpdatedAt), ageW))
-	}
-	cols = append(cols, age)
-	right := strings.Join(cols, " ")
-
-	left := activeMark + indent + numStr + ist.Render(icon) + " "
-	avail := w - ansi.StringWidth(left) - ansi.StringWidth(right) - 1
-	name := nameStyle.Render(pad(s.Name, avail))
-	return left + name + " " + right
+	return left + nameStyle.Render(pad(s.Name, max(1, avail))) + " " + right
 }
+
 func familyStyle(family string) lipgloss.Style {
 	fg := lipgloss.Color("246")
 	switch {
@@ -683,7 +581,7 @@ func (m *Model) viewImport() string {
 	}
 	switch {
 	case m.scanning:
-		lines = append(lines, "", stDim.Render("  scanning ~/.claude/projects "+spinnerFrames[m.spin%len(spinnerFrames)]))
+		lines = append(lines, "", stDim.Render("  scanning agent conversations "+spinnerFrames[m.spin%len(spinnerFrames)]))
 	case len(filtered) == 0:
 		lines = append(lines, "", stDim.Render("  nothing found"))
 	default:
@@ -731,91 +629,69 @@ func shortDir(dir string) string {
 
 // viewConfirm renders a question in the middle of the screen. A question in the
 // footer is missed: you press a key expecting it to act, and the answer is one
-// line away from where you are looking — which for "delete forever" is the wrong
+// line away from where you are looking — which for "remove from desk" is the wrong
 // place to be subtle.
 func (m *Model) viewConfirm() string {
-	q, hint := m.confirmMsg, "y confirm · n cancel"
-	// The message may carry its own "(y/n)"; the box says that already.
-	for _, suffix := range []string{" (y/n)", "(y/n)"} {
-		q = strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(q), suffix))
+	lines := strings.Split(m.confirmMsg, "\n")
+	if len(lines) > 0 {
+		lines[0] = stText.Bold(true).Render(lines[0])
 	}
-	inner := max(ansi.StringWidth(q), ansi.StringWidth(hint))
-	if maxW := m.width - 8; inner > maxW && maxW > 10 {
-		inner = maxW
-		q = ansi.Truncate(q, inner, "…")
+	return m.scrollBox(lines, "y confirm · n / Esc cancel")
+}
+
+func (m *Model) viewGroupPick() string {
+	w := max(8, m.width-6)
+	lines := []string{stHeader.Render(pad(m.pickerTitle(), w)), ""}
+	start, end := m.pickerWindow()
+	for i := start; i < end; i++ {
+		it := m.pickItems[i]
+		label := it.label
+		if it.key != "" {
+			label = pad(label, max(1, w-ansi.StringWidth(it.key)-4)) + " " + it.key
+		}
+		if m.pickKind == "color" {
+			var slot int
+			fmt.Sscanf(it.id, "%d", &slot)
+			label = lipgloss.NewStyle().Foreground(groupLip(slot)).Render("■ " + label)
+		}
+		if i == m.pickSel {
+			lines = append(lines, stSelected.Render(pad("› "+label, w)))
+		} else {
+			lines = append(lines, pad("  "+label, w))
+		}
 	}
-	lines := []string{
-		pad(stText.Bold(true).Render(ansi.Truncate(q, inner, "…")), inner),
-		pad("", inner),
-		pad(stDim.Render(hint), inner),
+	if m.inputErr != "" {
+		lines = append(lines, stErr.Render(ansi.Wrap(m.inputErr, w, "")))
+	} else if m.pickKind == "agent" {
+		lines = append(lines, stDim.Render(pad(shortDir(m.pendingDir), w)))
+	} else {
+		lines = append(lines, "")
+	}
+	if len(m.pickItems) > m.pickerVisible() {
+		lines = append(lines, stDim.Render(fmt.Sprintf("%d/%d", m.pickSel+1, len(m.pickItems))))
+	}
+	lines = append(lines, stDim.Render(pad(m.pickerHint(), w)))
+	// Leave the list and footer anchored; detailed errors may be scrolled.
+	if len(strings.Split(strings.Join(lines, "\n"), "\n"))+2 > m.listInnerHeight() {
+		return m.scrollBox(lines[:len(lines)-1], m.pickerHint())
+	}
+	for i := range lines {
+		lines[i] = pad(lines[i], w)
 	}
 	return stOverlay.Render(strings.Join(lines, "\n"))
 }
 
-func (m *Model) viewGroupPick() string {
-	title := "move to group"
-	switch m.pickKind {
-	case "sort":
-		title = "sort sessions by"
-	case "color":
-		title = "group color"
-	case "agent":
-		title = "agent"
-	case "menu":
-		if m.menuRow.kind == rowGroup {
-			if g := m.st.Group(m.menuRow.id); g != nil {
-				title = g.Name
-			} else {
-				title = "old"
-			}
-		} else if s := m.st.Session(m.menuRow.id); s != nil {
-			title = ansi.Truncate(s.Name, 24, "…")
-		}
-	}
-	// Widest label decides the column the shortcuts line up in.
-	labelW := 0
-	for _, it := range m.pickItems {
-		if w := ansi.StringWidth(it.label); w > labelW {
-			labelW = w
-		}
-	}
-	var b strings.Builder
-	b.WriteString(stHeader.Render(title) + "\n\n")
-	for i, it := range m.pickItems {
-		label := it.label
-		if it.key != "" {
-			label = pad(label, labelW) + "  " + stDim.Render(it.key)
-		}
-		if m.pickKind == "color" {
-			// render each option as a swatch in its own color
-			var slot int
-			fmt.Sscanf(it.id, "%d", &slot)
-			label = lipgloss.NewStyle().Foreground(groupLip(slot)).Render("■ " + it.label)
-		} else if i != m.pickSel {
-			label = stDim.Render(label)
-		}
-		if i == m.pickSel {
-			b.WriteString(stSelected.Render(stText.Render("▸ ")+label+" ") + "\n")
-		} else {
-			b.WriteString("  " + label + " \n")
-		}
-	}
-	b.WriteString("\n" + stDim.Render("enter choose · esc cancel"))
-	return stOverlay.Render(b.String())
-}
-
-// viewInfo is the per-session details popup (v / right-click → info).
 func (m *Model) viewInfo() string {
 	s := m.st.Session(m.infoTarget)
 	if s == nil {
 		return ""
 	}
-	vw := m.width - 4
+	vw := m.width - 6
 	if vw > 56 {
 		vw = 56
 	}
-	if vw < 16 {
-		vw = 16
+	if vw < 8 {
+		vw = 8
 	}
 	info := m.probeInfo(s.ID)
 	k := m.statusOf(s.ID)
@@ -825,15 +701,12 @@ func (m *Model) viewInfo() string {
 	// the dir, the conversation id and the tmux name are the values this
 	// popup exists for, and a narrow sidebar must not eat them.
 	row := func(label string, val string) string {
-		avail := vw - 9
+		avail := max(1, vw-9)
 		if ansi.StringWidth(val) <= avail {
 			return stDim.Render(pad(label, 9)) + val
 		}
 		wrapped := strings.Split(ansi.Wrap(val, avail, ""), "\n")
-		if len(wrapped) > 3 {
-			wrapped = wrapped[:3]
-			wrapped[2] = ansi.Truncate(wrapped[2], avail-1, "…")
-		}
+
 		out := stDim.Render(pad(label, 9)) + wrapped[0]
 		for _, l := range wrapped[1:] {
 			out += "\n" + blank(9) + l
@@ -843,7 +716,11 @@ func (m *Model) viewInfo() string {
 	var lines []string
 	lines = append(lines, stText.Bold(true).Render(ansi.Truncate(s.Name, vw, "…")), "")
 
-	statusVal := ist.Render(icon) + " " + string(k)
+	statusText := strings.ReplaceAll(string(k), "_", " ")
+	if k == status.Dormant {
+		statusText = "stopped · resumable"
+	}
+	statusVal := ist.Render(icon) + " " + statusText
 	if r := m.runtime[s.ID]; r.Message != "" {
 		statusVal += stDim.Render(" — ") + stNew.Render(r.Message)
 	} else if !m.runtime[s.ID].UpdatedAt.IsZero() {
@@ -863,15 +740,19 @@ func (m *Model) viewInfo() string {
 	if info.ContextTokens > 0 {
 		window := m.contextWindowOf(s.ID)
 		pct := info.ContextTokens * 100 / window
+		approx := ""
+		if s.AgentOf() == state.AgentClaude {
+			approx = "~"
+		}
 		lines = append(lines, row("context",
 			tokenStyle(info.ContextTokens, window).Render(fmtTokens(info.ContextTokens))+
-				stDim.Render(fmt.Sprintf(" · ~%d%% of %s · size right now", pct, fmtTokens(window)))))
+				stDim.Render(fmt.Sprintf(" · %s%d%% of %s · size right now", approx, pct, fmtTokens(window)))))
 	}
 	if c := m.costOf(s.ID); c >= 0.01 {
 		// Say which window this covers. Claude's own /usage reports only the
 		// current process, so a whole-conversation figure looks wrong beside it
 		// unless it is labelled.
-		lines = append(lines, row("cost",
+		lines = append(lines, row("est cost",
 			stText.Render(fmtUSD(c))+stDim.Render(" · whole conversation, every resume, incl. subagents")))
 	}
 	if info.TodosTotal > 0 {
@@ -906,7 +787,6 @@ func (m *Model) viewInfo() string {
 		live = "live · tmux " + state.TmuxName(s.ID)
 	}
 	lines = append(lines, row("process", stDim.Render(live)))
-	lines = append(lines, "", stDim.Render("any key closes"))
 
 	// A wrapped row is several screen lines; flatten before padding.
 	var flat []string
@@ -916,75 +796,11 @@ func (m *Model) viewInfo() string {
 	for i := range flat {
 		flat[i] = pad(flat[i], vw)
 	}
-	return stOverlay.Render(strings.Join(flat, "\n"))
+	return m.scrollBox(flat, "↑↓ scroll · Esc close")
 }
 
 // viewHelp is a full-body page (not a floating box) so it always fits the
 // sidebar, however narrow.
 func (m *Model) viewHelp() string {
-	iw := m.width
-	ih := m.listInnerHeight()
-	k := modKey
-	rows := [][2]string{
-		{"enter", "open (wakes dormant)"},
-		{k("o"), "open, keep focus here"},
-		{"ctrl+\\", "sidebar ⇄ session"},
-		{"tab", "focus the session"},
-		{k("[") + " " + k("]"), "prev / next session"},
-		{k("1") + "-" + k("9"), "n-th open session"},
-		{k("a"), "next session needing you"},
-		{k("/"), "search"},
-		{k("n"), "new session"},
-		{k("W"), "new session in a git worktree"},
-		{k("i"), "import past conversation"},
-		{k("N") + " " + k("r") + " " + k("m"), "group / rename / regroup"},
-		{"", "(also renames in the agent)"},
-		{k("J") + " " + k("K"), "reorder (or drag)"},
-		{k("s"), "sort: status/recent/name/dir"},
-		{k("v"), "session info popup"},
-		{k("f") + " " + k("F"), "its folder · scratchpad"},
-		{k("M"), "mute / unmute alerts"},
-		{"right-click", "context menu (rows & tabs)"},
-		{k("c"), "cycle group color"},
-		{k("spc"), "collapse group (tab folds too)"},
-		{k("<") + " " + k(">"), "sidebar width"},
-		{k("z"), "close tab, stays on desk"},
-		{k("x"), "close to old · in old: delete"},
-		{k("u"), "reopen what you just closed"},
-		{k("q"), "quit, sessions live on"},
-	}
-	// The key column is exactly as wide as its widest label.
-	keyW := 0
-	for _, r := range rows {
-		if w := ansi.StringWidth(r[0]); w > keyW {
-			keyW = w
-		}
-	}
-	keyW += 2
-	lines := []string{" " + stHeader.Render("keys"), ""}
-	for _, r := range rows {
-		// A narrow sidebar wraps the description instead of chopping it — the
-		// help page is where chopped words cost the most.
-		avail := max(8, iw-keyW-2)
-		parts := strings.Split(ansi.Wordwrap(r[1], avail, " "), "\n")
-		lines = append(lines, " "+stText.Bold(true).Render(pad(r[0], keyW))+stDim.Render(parts[0]))
-		for _, p := range parts[1:] {
-			lines = append(lines, " "+blank(keyW)+stDim.Render(p))
-		}
-	}
-	lines = append(lines, "",
-		" "+stWorking.Render("⠙ working ")+stAlert.Render("◆ needs you"),
-		" "+stNew.Render("● new ")+stIdle.Render("· idle ")+stDormant.Render("○ dormant"),
-		"",
-		" "+stDim.Render("every chord works from inside an agent too;"),
-		" "+stDim.Render("bare letters never act — stray typing is safe"),
-		" "+stDim.Render("tmux prefix here: ctrl+q · any key closes"))
-	for len(lines) < ih {
-		lines = append(lines, "")
-	}
-	lines = lines[:ih]
-	for i := range lines {
-		lines[i] = pad(lines[i], iw)
-	}
-	return strings.Join(lines, "\n")
+	return m.scrollBox(m.helpLines(), "↑↓ / PgUp PgDn scroll · Esc close")
 }

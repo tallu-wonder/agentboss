@@ -34,6 +34,7 @@ import (
 
 	"github.com/tallu-wonder/agentboss/internal/codexnotify"
 	"github.com/tallu-wonder/agentboss/internal/hooks"
+	"github.com/tallu-wonder/agentboss/internal/keymap"
 	"github.com/tallu-wonder/agentboss/internal/notify"
 	"github.com/tallu-wonder/agentboss/internal/paths"
 	"github.com/tallu-wonder/agentboss/internal/state"
@@ -94,10 +95,7 @@ func returnKey() string {
 // actionKeys is every keymap chord beyond the switching set, bound desk-wide
 // so the whole keymap works from inside an agent. tmux key names ("Space" is
 // the space key); < > / ? travel as tokens (see tmuxctl.ActKey).
-var actionKeys = []string{
-	"n", "W", "N", "i", "r", "m", "J", "K", "s", "v", "f", "F", "M",
-	"c", "h", "z", "x", "u", "q", "Space", "<", ">", "/", "?",
-}
+var actionKeys = keymap.Keys()
 
 // actTokenRe accepts what `_act` may carry: a single letter, or one of the
 // spelled-out tokens.
@@ -478,7 +476,7 @@ func runViewportPlaceholder() {
 		"   no session open",
 		"",
 		"   \x1b[2mpick one on the left —\x1b[0m",
-		"   \x1b[2menter opens · n starts new · i imports\x1b[0m",
+		"   \x1b[2menter opens · " + keymap.Hint("n", "new") + " · " + keymap.Hint("i", "import") + "\x1b[0m",
 		"   \x1b[2mctrl+\\ toggles sidebar ⇄ session\x1b[0m",
 	} {
 		fmt.Println(l)
@@ -488,17 +486,11 @@ func runViewportPlaceholder() {
 	}
 }
 
-// runTabClose handles middle-click on a tab: the session's process is
-// killed but its desk entry stays (dormant). The manager notices on its
-// next tick and moves the viewport along.
+// runTabClose queues the same stop confirmation used by keyboard actions.
 func runTabClose(arg string) {
 	arg = strings.TrimPrefix(arg, "user|")
-	if arg == "" || arg == "manager" {
-		return
-	}
-	name := state.TmuxName(arg)
-	if tmuxctl.Has(name) {
-		_ = tmuxctl.KillSession(name)
+	if state.ValidID(arg) && arg != "manager" {
+		queueCmd("stop", arg, "")
 	}
 }
 
@@ -707,6 +699,14 @@ func runTabMenu(arg, _ string) {
 // run-shell. Stateless: reads the desk, finds the viewport, switches it.
 func runTab(arg string) {
 	arg = strings.TrimPrefix(arg, "user|")
+	if arg == "attn" {
+		queueCmd("act", "", "a")
+		return
+	}
+	if arg == "next" || arg == "prev" || arg == "tabs:next" || arg == "tabs:prev" || len(arg) == 2 && arg[0] == 'n' && arg[1] >= '1' && arg[1] <= '9' {
+		queueCmd("navigate", "", strings.TrimPrefix(arg, "tabs:"))
+		return
+	}
 	if arg == "" {
 		return
 	}

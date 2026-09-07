@@ -436,6 +436,8 @@ func CapturePanePlain(name string) (string, error) {
 // status line is the tab bar (top), mouse is on, and the prefix is moved off
 // C-b so claude's readline keys pass through untouched.
 func ConfigureManagerSession() {
+	_, _ = run("set-option", "-w", "-t", "="+ManagerSession+":", "pane-border-style", "fg=colour244")
+	_, _ = run("set-option", "-w", "-t", "="+ManagerSession+":", "pane-active-border-style", "fg=colour51,bold")
 	opts := [][2]string{
 		{"status", "on"},
 		{"status-position", "top"},

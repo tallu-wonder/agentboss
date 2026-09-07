@@ -48,9 +48,10 @@ SESSIONS=("payments refactor" "flaky login test" "release notes" "PR sweep" "dep
 for n in "${SESSIONS[@]}"; do mkdir -p "$D/work/$n"; done
 
 env -i PATH="$D/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin" \
-  TMUX_TMPDIR="$D" TERM=xterm-256color TERM_PROGRAM=ghostty HOME="$D" \
-  AGENTBOSS_HOME="$D/home" AGENTBOSS_CLAUDE_SETTINGS="$D/settings.json" \
+  TMUX_TMPDIR="$D" TERM=xterm-256color TERM_PROGRAM=ghostty \
+  AGENTBOSS_HOME="$D/home" AGENTBOSS_NO_HOOKS=1 AGENTBOSS_CLAUDE_SETTINGS="$D/settings.json" \
   AGENTBOSS_CLAUDE_CMD="$D/bin/fakeagent" AGENTBOSS_CLAUDE_PROJECTS="$D/projects" \
+  AGENTBOSS_CODEX_CMD="$D/bin/fakeagent" AGENTBOSS_CODEX_HOME="$D/codex" \
   AGENTBOSS_OPEN_CMD="$D/bin/open" \
   tmux new-session -d -s agentboss -x 99 -y 36 "$D/agentboss __ui"
 sleep 2
@@ -133,6 +134,8 @@ shot() {
 }
 keys 'M-?'; sleep 0.6; shot keys; keys Escape; sleep 0.3
 find_row "payments"; keys M-v; sleep 0.7; shot info; keys Escape; sleep 0.3
+keys M-p; sleep 0.4; shot commands; keys Escape
+keys M-A; sleep 0.4; shot attention; keys Escape
 
 # The hero is shorter. Resize first, then reopen the featured session so its
 # agent paints at the final size (a repaint after shrinking would otherwise
@@ -148,4 +151,4 @@ T new-session -d -s holder -x 99 -y 25 "TMUX= tmux attach-session -t agentboss"
 sleep 2.5
 shot desk
 
-echo "wrote docs/desk.svg docs/info.svg docs/keys.svg"
+echo "wrote docs/desk.svg docs/info.svg docs/keys.svg docs/commands.svg docs/attention.svg"

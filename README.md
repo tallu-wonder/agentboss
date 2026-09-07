@@ -9,7 +9,7 @@
 ![go 1.25+](https://img.shields.io/badge/go-1.25%2B-00ADD8.svg)
 ![tmux 3.2+](https://img.shields.io/badge/tmux-3.2%2B-1BB91F.svg)
 
-<img src="docs/desk.svg" alt="agentboss: a sidebar of grouped sessions showing status, model, context and cost, tabs across the top, and the live agent filling the right-hand pane" width="100%">
+<img src="docs/desk.svg" alt="agentboss: a sidebar of grouped sessions showing status, keyboard focus and selected-session details, tabs across the top, and the live agent filling the right-hand pane" width="100%">
 
 </div>
 
@@ -39,7 +39,7 @@ costs nothing. A dormant session comes back with one keypress, resumed in the
 right folder by the right agent.
 
 **Thirty sessions need structure.** Colored groups, drag to reorder and regroup,
-search, sorting, an `old` shelf, and per-session model, context and cost — so a
+search, sorting, an **Archived** shelf, and per-session model, context and cost — so a
 desk with a month of history stays navigable.
 
 ## Install
@@ -126,13 +126,17 @@ switching-only set.
 
 | Key | Action |
 | --- | --- |
-| `enter` / click | open in the viewport (wakes dormant sessions; asks first for `old` ones) |
+| `enter` / click | open in the viewport (wakes dormant sessions; asks first for archived ones) |
 | `opt+o` | open but keep focus in the sidebar |
 | `ctrl+\` | sidebar ⇄ session; from another tmux session, jump to the desk |
 | `opt+[` `opt+]`, tab clicks | previous / next session — anywhere |
 | `opt+1`–`opt+9` | the n-th **open** session — anywhere, same order as the tabs |
 | `opt+a` | next session needing attention — anywhere |
-| `opt+/` | search (substring on name/folder/group, fuzzy on name) |
+| `opt+p` | searchable command palette, including fork and remove |
+| `opt+/` | search names/folders/groups; combine `agent:codex`, `project:payments`, `status:blocked` |
+| `opt+A` · `opt+e` | needs-attention queue · filter by agent or project |
+| `opt+b` · `opt+B` | select/deselect a session · select all visible sessions |
+| `opt+t` | toggle optional metrics in wide sidebar rows |
 | `opt+n` · `opt+i` | new session · import a past conversation (both agents) |
 | `opt+W` | new session in a fresh **git worktree** of a repo |
 | `opt+N` · `opt+r` · `opt+m` | new group · rename · move to group |
@@ -144,8 +148,8 @@ switching-only set.
 | right-click | context menu, on a row or a tab, with single-letter shortcuts (it's modal — prose can't reach it) |
 | `opt+space` / `opt+h` | collapse or expand a group (`enter` on the header too) |
 | `opt+<` `opt+>`, drag divider | sidebar width |
-| `opt+z` · `opt+x` | close the tab (session stays, asks first) · close to `old`; on an old session, delete |
-| `opt+u` | reopen what you just closed or shelved |
+| `opt+z` · `opt+x` | stop the agent (resumable) · stop and archive; on an archived session, remove from desk |
+| `opt+u` | undo the last stop/archive, including a batch; previously running agents resume |
 | `opt+q` | quit the manager (asks first) — every agent keeps running |
 
 On macOS, Option only sends Alt if the terminal says so — Ghostty needs
@@ -154,11 +158,49 @@ read `opt` as `alt`. Terminals that use some of these chords themselves can
 move the cycle keys with `AGENTBOSS_PREV_KEY` / `AGENTBOSS_NEXT_KEY`.
 
 Mouse: click a row to open it, drag rows and headers to reorder and regroup,
-click tabs to switch, drag tabs to reorder, middle-click to close, right-click
+click tabs to switch, drag tabs to reorder, middle-click to request a stop, right-click
 for a menu, wheel to scroll, and click into the session to talk to the agent.
 When more tabs are open than fit, the strip follows the active one and the
 rest collapse into `‹N` / `N›` chips — click a chip to step that way; it turns
 red when a hidden session needs you.
+
+## Finding and organizing work
+
+<table>
+<tr>
+<td width="50%"><img src="docs/commands.svg" alt="Searchable command palette with keyboard shortcuts" width="100%"></td>
+<td width="50%"><img src="docs/attention.svg" alt="Attention queue showing blocked requests and how long they have waited" width="100%"></td>
+</tr>
+</table>
+
+`opt+p` searches the available commands. Bare letters still cannot trigger desk
+commands; use Option/Alt to open a dialog, then type normally inside it. All
+shortcut hints come from the same definitions used by the global bindings.
+
+`opt+A` opens a flat attention queue, with blocking requests first, oldest wait
+first, and each request's reason. Viewing a request marks its notification seen;
+**it stays blocked until the agent resumes**. Completed-turn notifications clear
+when viewed. `opt+e` filters by agent or project; search accepts combinations such
+as `agent:codex project:payments status:blocked`. Escape clears the filters.
+
+Select sessions with `opt+b`, or all visible sessions with `opt+B`, then use
+`opt+m` to move them or `opt+x` to archive them. Selection survives filtering and
+shows a count; Escape clears selection before filters. Batch confirmations list
+the affected sessions. `opt+u` restores the last stopped/archived batch, resuming
+only the agents that were previously running.
+
+The sidebar reserves space for session names and statuses. The selected session's
+project, branch, agent, context percentage and estimated conversation cost appear
+below the list. `opt+t` adds context/cost to rows when the sidebar is wide enough.
+The persistent **Typing** line identifies the pane receiving input; `›` marks the
+selected row, `▎` the displayed session, and `✓` selected batch entries.
+
+New sessions use a dialog with recent folders, visible Tab completion candidates,
+and persistent validation. Arrow keys choose a folder. Shift+Tab goes back from a
+worktree name; Left or Shift+Tab goes back from agent selection. A worktree is
+created only when the agent choice is submitted. Help, session info and long
+confirmations scroll with arrows/Page Up/Page Down and close with Escape. Long
+form errors scroll with Alt+Up/Down.
 
 ## How it works
 
@@ -170,11 +212,11 @@ red when a hidden session needs you.
 - **The desk is a file.** Groups, order, folders, agent kind and conversation IDs
   live in `~/.agentboss/state.json`, written atomically by the one manager that
   holds the lock.
-- **Nothing irreversible is quiet.** Deleting, shelving, closing a tab, quitting
-  the manager and reviving a shelved session all ask first — in a popup in the
-  middle of the sidebar, not a line in the footer you press past. Every desk key
-  is a single letter, and sooner or later you will type one believing an agent
-  had focus; the ones that could cost you something are the ones that ask.
+- **Lifecycle actions explain their scope.** Stop ends the agent process and
+  keeps a resumable desk entry. Archive also moves that entry to Archived.
+  Remove from desk leaves conversation transcripts and project files intact.
+  Keyboard actions, context menus and tab middle-clicks all ask before stopping
+  or removing work, in a scrolling dialog with the affected session names.
 - **A crash is survivable.** If the sidebar panics it writes
   `~/.agentboss/crash.log`, restarts itself and says so. Your agents never notice.
 
@@ -215,9 +257,10 @@ wrong.
 ## Notifications
 
 When a session starts asking for you, agentboss posts a desktop notification;
-clicking it raises the terminal, switches the viewport to that session and clears
-the alert. The session already in the viewport stays silent, and `M` mutes the
-rest while you work at the desk (the header shows 🔇, and it persists).
+clicking it raises the terminal, switches the viewport to that session and marks
+the notification seen. Blocking requests remain in the queue after viewing until the agent resumes.
+The session already in the viewport stays silent, and `opt+M` mutes the
+rest while you work at the desk (the header shows `muted`, and it persists).
 
 Muting is a toggle rather than something clever, because whether you are *looking*
 at the desk cannot be detected: terminals report focus per window, so another tab
@@ -279,7 +322,7 @@ line is rewritten.
   newer intent. Right-click → *use the agent's name* releases a name you pinned.
 - A resumed Codex thread keeps its ID but starts a new transcript file, so
   agentboss resolves a thread to its newest one rather than trusting file names.
-- Sessions started outside agentboss aren't tracked; use `n` or `i`.
+- Sessions started outside agentboss aren't tracked; use `opt+n` or `opt+i`.
 
 ## Development
 

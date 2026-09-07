@@ -60,6 +60,23 @@ func TestNotificationKeepsMessage(t *testing.T) {
 	}
 }
 
+func TestQuestionsRemainBlockingUntilAnswered(t *testing.T) {
+	for _, event := range []HookEvent{
+		{HookEventName: "PreToolUse", ToolName: "AskUserQuestion"},
+		{HookEventName: "Notification", NotificationType: "elicitation_dialog", Message: "Please choose an option"},
+		{HookEventName: "Notification", NotificationType: "permission_prompt", Message: "Approval required"},
+	} {
+		blocked, ok := Apply(Runtime{Status: Working}, event)
+		if !ok || blocked.Status != NeedsYou {
+			t.Fatalf("question was not blocking: %+v", blocked)
+		}
+		resumed, _ := Apply(blocked, HookEvent{HookEventName: "PostToolUse", ToolName: "AskUserQuestion"})
+		if resumed.Status != Working || resumed.Message != "" {
+			t.Fatal("answer did not clear the blocked state")
+		}
+	}
+}
+
 func TestWriteReadRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	if err := Write(dir, "s_1", Runtime{Status: Attention, ClaudeSessionID: "cs"}); err != nil {

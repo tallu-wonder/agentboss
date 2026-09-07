@@ -124,10 +124,12 @@ func Remove(dir, sessionID string) {
 // HookEvent is the subset of the JSON Claude Code pipes to hook commands
 // that agentboss cares about.
 type HookEvent struct {
-	HookEventName string `json:"hook_event_name"`
-	SessionID     string `json:"session_id"`
-	CWD           string `json:"cwd"`
-	Message       string `json:"message"`
+	HookEventName    string `json:"hook_event_name"`
+	SessionID        string `json:"session_id"`
+	CWD              string `json:"cwd"`
+	Message          string `json:"message"`
+	NotificationType string `json:"notification_type"`
+	ToolName         string `json:"tool_name"`
 }
 
 // Apply maps a hook event onto the previous runtime status and returns the
@@ -141,14 +143,22 @@ func Apply(prev Runtime, ev HookEvent) (Runtime, bool) {
 	case "SessionStart":
 		next.Status = Idle
 		next.Message = ""
-	case "UserPromptSubmit", "PreToolUse", "PostToolUse":
+	case "PreToolUse":
+		if ev.ToolName == "AskUserQuestion" {
+			next.Status = NeedsYou
+			next.Message = "Waiting for your answer"
+		} else {
+			next.Status = Working
+			next.Message = ""
+		}
+	case "UserPromptSubmit", "PostToolUse":
 		next.Status = Working
 		next.Message = ""
 	case "Notification":
 		// Only a blocking request (permission prompt / question) is a red
 		// "needs you". Claude also sends a notification when a session has
 		// merely been idle a while — that's a soft "look at me".
-		if strings.Contains(strings.ToLower(ev.Message), "permission") {
+		if ev.NotificationType == "permission_prompt" || ev.NotificationType == "elicitation_dialog" || strings.Contains(strings.ToLower(ev.Message), "permission") {
 			next.Status = NeedsYou
 		} else {
 			next.Status = Attention
