@@ -449,7 +449,8 @@ func (m *Model) renderSessionRow(id string, num, w int) string {
 	if g := m.st.Group(s.GroupID); g != nil {
 		left = cursor + active + lipgloss.NewStyle().Foreground(groupLip(g.Color)).Render("│") + mark + number
 	}
-	right := style.Render(icon)
+	// Leave two cells between the status icon and the pane divider.
+	right := style.Render(icon) + "  "
 	if m.st.ShowMetrics && w >= 46 {
 		// Reserve the same cells on every row, including missing/unpriced
 		// values, so numbers stay aligned across agents and status changes.

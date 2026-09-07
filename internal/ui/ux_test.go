@@ -307,8 +307,8 @@ func TestRowMetricsStayAligned(t *testing.T) {
 						t.Fatalf("redundant row text %q: %q", removed, line)
 					}
 				}
-				if !strings.HasSuffix(line, tc.icon) || strings.Count(line, tc.icon) != 1 || ansi.StringWidth(tc.icon) != 1 {
-					t.Fatalf("expected a single status icon in the last cell: %q", line)
+				if !strings.HasSuffix(line, tc.icon+"  ") || strings.Count(line, tc.icon) != 1 || ansi.StringWidth(tc.icon) != 1 {
+					t.Fatalf("expected a single status icon with a two-cell right margin: %q", line)
 				}
 				if tc.family != "" {
 					at := strings.Index(line, tc.family)
