@@ -131,6 +131,10 @@ type Model struct {
 	// a pane running several agents is judged once rather than every tick.
 	refusedConv map[string]string
 
+	// bindingChecked remembers rows whose stored conversation was verified to
+	// run in their own folder, so the transcript head is read once per run.
+	bindingChecked map[string]bool
+
 	// unfocused: the keyboard is elsewhere (usually inside the agent). Read
 	// from tmux's pane_active each tick; the sidebar dims its header so a
 	// glance answers "where will my keys land?".
@@ -1039,6 +1043,24 @@ func (m *Model) syncNames() {
 		// (an id block, a folder slug). Those used to be accepted as
 		// authoritative, so a session can be sitting here permanently named
 		// after nothing, unable to take the title its transcript holds.
+		// Drop a binding that belongs to another folder's work. Rows could be
+		// handed a conversation from a different session (a pre-warmed agent
+		// carrying a stale AGENTBOSS_ID), and such a row then impersonates
+		// it: two rows wearing the same name, one of them resuming work that
+		// is not its own. Judged once per row per run, and only ever against
+		// a folder the agent itself recorded.
+		if s.SessionID != "" && !m.bindingChecked[s.ID] {
+			if m.bindingChecked == nil {
+				m.bindingChecked = map[string]bool{}
+			}
+			m.bindingChecked[s.ID] = true
+			if home := prov.ConversationDir(s.SessionID); home != "" &&
+				filepath.Clean(home) != filepath.Clean(s.Dir) {
+				s.SessionID = ""
+				p.path, p.title, p.info = "", "", agents.Info{}
+				m.dirty = true
+			}
+		}
 		if s.NameExplicit && !s.NamedByUser &&
 			(productTitle(s.Name) || prov.PlaceholderName(s.Name, s.SessionID, s.Dir)) {
 			s.NameExplicit = false

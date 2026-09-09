@@ -130,6 +130,16 @@ func TranscriptPath(sessionID string) string {
 	return ""
 }
 
+// ConversationDir is the folder a conversation runs in, read from the head of
+// its transcript. "" when the transcript is gone or names no folder.
+func ConversationDir(sessionID string) string {
+	path := TranscriptPath(sessionID)
+	if path == "" {
+		return ""
+	}
+	return peek(path).Dir
+}
+
 // ScratchDir returns the directory where a Claude session keeps its own files:
 // its scratchpad if it has one, otherwise the session directory itself. "" if
 // the session never made one (or /tmp has since been cleaned).

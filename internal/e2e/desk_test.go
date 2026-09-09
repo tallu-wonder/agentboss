@@ -1081,3 +1081,33 @@ func TestAReportFromAnotherFolderCannotClaimARow(t *testing.T) {
 		return d.state().Sessions[0].ConvID == "88888888-8888-4888-8888-888888888888"
 	})
 }
+
+// A row that already holds a conversation belonging to another folder (bound
+// before origin was checked) drops it, rather than impersonating that work:
+// two rows wore the same name, and the wrong one would have resumed it.
+func TestAForeignBindingIsDropped(t *testing.T) {
+	d := newDesk(t)
+	id := d.newSession("mine")
+
+	// A conversation whose transcript says it runs somewhere else entirely.
+	foreign := "77777777-7777-4777-8777-777777777777"
+	proj := filepath.Join(d.dir, "projects", "-elsewhere")
+	if err := os.MkdirAll(proj, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	head := `{"type":"user","cwd":"/somewhere/else","timestamp":"2026-09-09T10:00:00Z"}` + "\n"
+	if err := os.WriteFile(filepath.Join(proj, foreign+".jsonl"), []byte(head), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// Bind it the way an older build would have: straight into the desk file.
+	// The manager owns state.json, so go through its own hook path instead,
+	// with a cwd it accepts, then move the transcript out from under it.
+	mine := filepath.Join(d.dir, "work", "mine")
+	d.hook(id, `{"hook_event_name":"SessionStart","session_id":"`+foreign+`","cwd":"`+mine+`"}`)
+	d.waitFor("the row to hold the conversation", func() bool {
+		return d.state().Sessions[0].ConvID == foreign
+	})
+	d.waitFor("the foreign binding to be dropped", func() bool {
+		return d.state().Sessions[0].ConvID == ""
+	})
+}

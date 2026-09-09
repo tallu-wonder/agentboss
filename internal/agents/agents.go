@@ -66,6 +66,10 @@ type Provider interface {
 	ForkArgs(sessionID string) []string
 	// TranscriptPath locates a conversation's transcript, "" if not found.
 	TranscriptPath(sessionID string) string
+	// ConversationDir is the folder a conversation runs in, as the agent
+	// itself recorded it. "" when the agent cannot say, which callers must
+	// read as "unknown" rather than "elsewhere".
+	ConversationDir(sessionID string) string
 	// ScratchDir is where the agent keeps the session's own working files
 	// (Claude Code's per-session scratchpad). "" when the agent has no such
 	// directory, or hasn't created one yet.
@@ -134,6 +138,9 @@ func (claudeProvider) ForkArgs(sessionID string) []string {
 }
 func (claudeProvider) TranscriptPath(sessionID string) string {
 	return claudesessions.TranscriptPath(sessionID)
+}
+func (claudeProvider) ConversationDir(sessionID string) string {
+	return claudesessions.ConversationDir(sessionID)
 }
 func (claudeProvider) ScratchDir(sessionID string) string {
 	return claudesessions.ScratchDir(sessionID)
@@ -207,6 +214,11 @@ func (codexProvider) ForkArgs(sessionID string) []string {
 func (codexProvider) TranscriptPath(sessionID string) string {
 	return codexsessions.TranscriptPath(sessionID)
 }
+
+// ConversationDir: a Codex rollout records its cwd, but the transcript is
+// found by date rather than by folder, and the desk only needs this to catch
+// a binding that points at another folder's work. Unknown is the safe answer.
+func (codexProvider) ConversationDir(string) string { return "" }
 
 // ScratchDir: Codex keeps no per-session working directory — its rollout
 // transcript is all it writes — so there is nothing to open.
