@@ -79,6 +79,10 @@ type Provider interface {
 	// LiveName is the name the CLI itself is showing for a running session
 	// ("" when the agent has no live registry).
 	LiveName(sessionID string) string
+	// PlaceholderName reports whether a name is one the CLI generates for an
+	// unnamed conversation (Claude Code labels those after the session id or
+	// the working directory) rather than one someone chose.
+	PlaceholderName(name, sessionID, dir string) bool
 	// Scan lists past conversations for the import picker.
 	Scan(exclude map[string]bool, limit int) []Conversation
 	// Rename records a new name where the agent can see it. Returning false
@@ -157,6 +161,9 @@ func (claudeProvider) Adopt(string, time.Time) string { return "" }
 func (claudeProvider) LiveName(sessionID string) string {
 	return claudesessions.LiveName(sessionID)
 }
+func (claudeProvider) PlaceholderName(name, sessionID, dir string) bool {
+	return claudesessions.IsPlaceholderName(name, sessionID, dir)
+}
 func (claudeProvider) Scan(exclude map[string]bool, limit int) []Conversation {
 	src := claudesessions.Scan(exclude, limit)
 	out := make([]Conversation, 0, len(src))
@@ -231,6 +238,10 @@ func (codexProvider) Adopt(dir string, notBefore time.Time) string {
 func (codexProvider) LiveName(sessionID string) string {
 	return codexsessions.Names()[sessionID]
 }
+
+// PlaceholderName: Codex names a thread only when asked, so any name the desk
+// holds for one came from the desk itself.
+func (codexProvider) PlaceholderName(string, string, string) bool { return false }
 
 func (codexProvider) Scan(exclude map[string]bool, limit int) []Conversation {
 	src := codexsessions.Scan(exclude, limit)

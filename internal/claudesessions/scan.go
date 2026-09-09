@@ -754,6 +754,14 @@ func clean(s string) string {
 // worse, a session could end up displayed as a bare hex blob while its
 // transcript held a perfectly good title.
 func placeholderLabel(name, sessionID, cwd string) bool {
+	return IsPlaceholderName(name, sessionID, cwd)
+}
+
+// IsPlaceholderName reports whether name is one of Claude Code's labels for an
+// unnamed agent rather than a title someone chose. Exported so the desk can
+// tell a stored name that came from a label (and must not be trusted as
+// authoritative) from a real one.
+func IsPlaceholderName(name, sessionID, cwd string) bool {
 	if name == "" {
 		return false
 	}

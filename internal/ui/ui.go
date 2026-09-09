@@ -1027,6 +1027,28 @@ func (m *Model) syncNames() {
 			name = p.title
 			explicit = p.info.TitleExplicit
 		}
+		// A live pane outranks all of it. Claude Code hosts several
+		// conversations per pane and names the pane after the one in FRONT, so
+		// that title is what the user is looking at right now: following it
+		// keeps the row honest when they switch conversations inside the pane,
+		// which no transcript or registry lookup can see.
+		if front := m.frontName(s.ID); front != "" {
+			name, explicit = front, !prov.PlaceholderName(front, s.SessionID, s.Dir)
+		}
+		// Heal a pin that came from one of the agent's own placeholder labels
+		// (an id block, a folder slug). Those used to be accepted as
+		// authoritative, so a session can be sitting here permanently named
+		// after nothing, unable to take the title its transcript holds.
+		if s.NameExplicit && !s.NamedByUser && prov.PlaceholderName(s.Name, s.SessionID, s.Dir) {
+			s.NameExplicit = false
+			// Nothing better may exist yet (a young conversation has no
+			// title), and a bare id block reads as noise on the desk, so fall
+			// back to what a new session is called here: its folder.
+			if folder := filepath.Base(s.Dir); folder != "" && folder != "." && folder != string(filepath.Separator) {
+				s.Name = folder
+			}
+			m.dirty = true
+		}
 		// A rename inside the agent is the newest thing the user said about
 		// this session, so it wins over a name pinned here. Derived titles
 		// never override a pin.
@@ -1210,6 +1232,26 @@ func (m *Model) adoptConversation(s *state.Session, reported string) bool {
 }
 
 // isLive reports whether the session's tmux session exists.
+// frontName is the name of the conversation a live session is showing: its
+// pane title, minus the status glyph the agent prefixes. "" when the session
+// is not live or the title says nothing useful (a shell, a bare command).
+func (m *Model) frontName(id string) string {
+	info, ok := m.live[state.TmuxName(id)]
+	if !ok {
+		return ""
+	}
+	title := strings.TrimSpace(info.Title)
+	// Claude marks a working conversation with a glyph: drop any leading
+	// non-letter run rather than guessing which glyph it used this release.
+	title = strings.TrimLeft(title, "✳✻✽✢·*⏵ \t")
+	title = sanitize.Line(title)
+	switch title {
+	case "", "zsh", "bash", "sh", "fish", "claude", "codex", "node":
+		return "" // a shell or the bare binary: not a conversation name
+	}
+	return title
+}
+
 func (m *Model) isLive(id string) bool {
 	_, ok := m.live[state.TmuxName(id)]
 	return ok

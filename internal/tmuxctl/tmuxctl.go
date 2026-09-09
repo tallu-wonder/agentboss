@@ -17,6 +17,11 @@ const ManagerSession = "agentboss"
 type Info struct {
 	Name     string
 	Attached bool
+	// Title is the active pane's title. Claude Code hosts several
+	// conversations in one pane and puts the one in FRONT here, prefixed with
+	// its own status glyph, so this is the only signal for which of them the
+	// user is actually looking at.
+	Title string
 }
 
 func run(args ...string) (string, error) {
@@ -46,16 +51,21 @@ func ServerAlive() bool {
 // server is not an error — it returns an empty map.
 func ListSessions() map[string]Info {
 	out := map[string]Info{}
-	raw, err := exec.Command("tmux", "list-sessions", "-F", "#{session_name}\t#{session_attached}").Output()
+	raw, err := exec.Command("tmux", "list-sessions", "-F",
+		"#{session_name}\t#{session_attached}\t#{pane_title}").Output()
 	if err != nil {
 		return out
 	}
 	for _, line := range strings.Split(strings.TrimSpace(string(raw)), "\n") {
-		parts := strings.SplitN(line, "\t", 2)
-		if len(parts) != 2 {
+		parts := strings.SplitN(line, "\t", 3)
+		if len(parts) < 2 {
 			continue
 		}
-		out[parts[0]] = Info{Name: parts[0], Attached: parts[1] != "0"}
+		info := Info{Name: parts[0], Attached: parts[1] != "0"}
+		if len(parts) == 3 {
+			info.Title = parts[2]
+		}
+		out[parts[0]] = info
 	}
 	return out
 }

@@ -254,3 +254,37 @@ func TestPaneModelReNeedsAVersionedChip(t *testing.T) {
 		}
 	}
 }
+
+// Claude Code hosts several conversations in one pane and titles the pane
+// after the one in front, so that title is the only signal for which
+// conversation the user is actually looking at. The desk reads it to name the
+// row, which means stripping the status glyph the agent prefixes and ignoring
+// titles that name a program rather than a conversation.
+func TestFrontNameReadsThePaneTitle(t *testing.T) {
+	m := &Model{live: map[string]tmuxctl.Info{}}
+	set := func(id, title string) {
+		m.live[state.TmuxName(id)] = tmuxctl.Info{Name: state.TmuxName(id), Title: title}
+	}
+	set("s_plain", "speed-up terraform workflows")
+	set("s_working", "✳ local-dns-failed-apply")
+	set("s_spaced", "  ✻  debug-nimbus-cloudflared-dns  ")
+	set("s_shell", "zsh")
+	set("s_bin", "claude")
+	set("s_empty", "")
+	set("s_glyphonly", "✳")
+
+	for id, want := range map[string]string{
+		"s_plain":     "speed-up terraform workflows",
+		"s_working":   "local-dns-failed-apply",
+		"s_spaced":    "debug-nimbus-cloudflared-dns",
+		"s_shell":     "",
+		"s_bin":       "",
+		"s_empty":     "",
+		"s_glyphonly": "",
+		"s_dormant":   "", // not live at all
+	} {
+		if got := m.frontName(id); got != want {
+			t.Errorf("frontName(%s) = %q, want %q", id, got, want)
+		}
+	}
+}
