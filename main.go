@@ -897,6 +897,15 @@ func runHook() {
 	if json.Unmarshal(data, &ev) != nil {
 		return
 	}
+	// Drop reports that belong to another session. A pre-warmed Claude Code
+	// process can carry a stale AGENTBOSS_ID, so an event's id is not proof
+	// of where it came from; writing it anyway put another conversation's
+	// activity on this row.
+	if st, err := state.Load(paths.StateFile()); err == nil {
+		if s := st.Session(id); s != nil && !s.AcceptsReport(ev.SessionID, ev.CWD) {
+			return
+		}
+	}
 	dir := paths.StatusDir()
 	prev := status.Read(dir, id)
 	if next, ok := status.Apply(prev, ev); ok {

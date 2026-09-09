@@ -1022,8 +1022,9 @@ func TestASecondConversationCannotStealARow(t *testing.T) {
 
 	// The agent announces itself, exactly as Claude Code's SessionStart hook
 	// does, and the desk learns the id it will resume.
+	work := filepath.Join(d.dir, "work", "keeps-its-identity")
 	first := "11111111-1111-4111-8111-111111111111"
-	d.hook(id, `{"hook_event_name":"SessionStart","session_id":"`+first+`"}`)
+	d.hook(id, `{"hook_event_name":"SessionStart","session_id":"`+first+`","cwd":"`+work+`"}`)
 	d.waitFor("the desk to learn the conversation id", func() bool {
 		return d.state().Sessions[0].ConvID == first
 	})
@@ -1039,7 +1040,7 @@ func TestASecondConversationCannotStealARow(t *testing.T) {
 
 	// A second agent in the same pane reports itself. The row must not move.
 	second := "22222222-2222-4222-8222-222222222222"
-	d.hook(id, `{"hook_event_name":"SessionStart","session_id":"`+second+`"}`)
+	d.hook(id, `{"hook_event_name":"SessionStart","session_id":"`+second+`","cwd":"`+work+`"}`)
 	time.Sleep(2 * time.Second)
 	if got := d.state().Sessions[0].ConvID; got != first {
 		t.Fatalf("row rebound to %s: a second agent stole the session", got)
@@ -1051,8 +1052,32 @@ func TestASecondConversationCannotStealARow(t *testing.T) {
 		t.Fatal(err)
 	}
 	third := "33333333-3333-4333-8333-333333333333"
-	d.hook(id, `{"hook_event_name":"SessionStart","session_id":"`+third+`"}`)
+	d.hook(id, `{"hook_event_name":"SessionStart","session_id":"`+third+`","cwd":"`+work+`"}`)
 	d.waitFor("a dead conversation id to be replaced", func() bool {
 		return d.state().Sessions[0].ConvID == third
+	})
+}
+
+// Claude Code pre-warms spare processes and hands them to whichever terminal
+// claims one, so a spare can carry another pane's AGENTBOSS_ID and report a
+// conversation that belongs to a different session. A report from another
+// folder is somebody else's conversation: it must not claim this row, which
+// is how a session ended up resuming work from an unrelated directory.
+func TestAReportFromAnotherFolderCannotClaimARow(t *testing.T) {
+	d := newDesk(t)
+	id := d.newSession("mine")
+	mine := filepath.Join(d.dir, "work", "mine")
+
+	// The row has no conversation yet, the easiest moment to steal it.
+	d.hook(id, `{"hook_event_name":"SessionStart","session_id":"99999999-9999-4999-8999-999999999999","cwd":"/somewhere/else"}`)
+	time.Sleep(2 * time.Second)
+	if got := d.state().Sessions[0].ConvID; got != "" {
+		t.Fatalf("row adopted a conversation from another folder: %s", got)
+	}
+
+	// Its own agent, in its own folder, is believed.
+	d.hook(id, `{"hook_event_name":"SessionStart","session_id":"88888888-8888-4888-8888-888888888888","cwd":"`+mine+`"}`)
+	d.waitFor("the row to learn its own conversation", func() bool {
+		return d.state().Sessions[0].ConvID == "88888888-8888-4888-8888-888888888888"
 	})
 }

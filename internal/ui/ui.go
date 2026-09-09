@@ -1039,7 +1039,8 @@ func (m *Model) syncNames() {
 		// (an id block, a folder slug). Those used to be accepted as
 		// authoritative, so a session can be sitting here permanently named
 		// after nothing, unable to take the title its transcript holds.
-		if s.NameExplicit && !s.NamedByUser && prov.PlaceholderName(s.Name, s.SessionID, s.Dir) {
+		if s.NameExplicit && !s.NamedByUser &&
+			(productTitle(s.Name) || prov.PlaceholderName(s.Name, s.SessionID, s.Dir)) {
 			s.NameExplicit = false
 			// Nothing better may exist yet (a young conversation has no
 			// title), and a bare id block reads as noise on the desk, so fall
@@ -1174,7 +1175,7 @@ func (m *Model) refresh() {
 		s := &m.st.Sessions[i]
 		known[s.ID] = true
 		if r, ok := m.runtime[s.ID]; ok && r.ClaudeSessionID != "" && r.ClaudeSessionID != s.SessionID {
-			if m.adoptConversation(s, r.ClaudeSessionID) {
+			if m.adoptConversation(s, r.ClaudeSessionID, r.CWD) {
 				m.dirty = true
 			}
 		}
@@ -1211,7 +1212,16 @@ func (m *Model) refresh() {
 // A row keeps the conversation it already has. It adopts a reported one only
 // when it has none yet, or when the id it holds has no transcript left, which
 // is the resume-failed-and-started-fresh case.
-func (m *Model) adoptConversation(s *state.Session, reported string) bool {
+func (m *Model) adoptConversation(s *state.Session, reported, cwd string) bool {
+	// A report is not proof of origin. Claude Code pre-warms spare processes
+	// and hands them to whichever terminal claims one, so a spare can carry
+	// another pane's AGENTBOSS_ID and report a conversation belonging to a
+	// different session: that is how a row ended up resuming work from an
+	// unrelated folder. A conversation running somewhere else is somebody
+	// else's.
+	if cwd != "" && filepath.Clean(cwd) != filepath.Clean(s.Dir) {
+		return false
+	}
 	if s.SessionID == "" {
 		s.SessionID = reported
 		return true
@@ -1232,6 +1242,17 @@ func (m *Model) adoptConversation(s *state.Session, reported string) bool {
 }
 
 // isLive reports whether the session's tmux session exists.
+// frontIsProduct reports whether a live session's pane shows the agent itself
+// rather than a conversation: its title is the product's own (a fresh Claude
+// Code screen), so there is nothing in progress there.
+func (m *Model) frontIsProduct(id string) bool {
+	info, ok := m.live[state.TmuxName(id)]
+	if !ok || strings.TrimSpace(info.Title) == "" {
+		return false // no title at all says nothing either way
+	}
+	return productTitle(sanitize.Line(strings.TrimLeft(strings.TrimSpace(info.Title), "✳✻✽✢·*⏵ \t")))
+}
+
 // frontName is the name of the conversation a live session is showing: its
 // pane title, minus the status glyph the agent prefixes. "" when the session
 // is not live or the title says nothing useful (a shell, a bare command).
@@ -1245,11 +1266,24 @@ func (m *Model) frontName(id string) string {
 	// non-letter run rather than guessing which glyph it used this release.
 	title = strings.TrimLeft(title, "✳✻✽✢·*⏵ \t")
 	title = sanitize.Line(title)
-	switch title {
-	case "", "zsh", "bash", "sh", "fish", "claude", "codex", "node":
-		return "" // a shell or the bare binary: not a conversation name
+	if productTitle(title) {
+		return ""
 	}
 	return title
+}
+
+// productTitle reports whether a pane title names a program rather than a
+// conversation: a shell, or the agent's own product name, which is what
+// Claude Code shows before any conversation exists (a fresh session, or one
+// whose resume failed). Naming a row after it says nothing and, worse, used
+// to be pinned as though someone had chosen it.
+func productTitle(title string) bool {
+	switch strings.ToLower(strings.TrimSpace(title)) {
+	case "", "zsh", "bash", "sh", "fish", "node",
+		"claude", "claude code", "codex", "codex cli", "agentboss":
+		return true
+	}
+	return false
 }
 
 func (m *Model) isLive(id string) bool {
@@ -1330,6 +1364,13 @@ func (m *Model) notifyAlerts() {
 func (m *Model) statusOf(id string) status.Kind {
 	if !m.isLive(id) {
 		return status.Dormant
+	}
+	// A pane with no conversation open (a fresh agent, or one whose resume
+	// failed) cannot be working, whatever its status file says. Reports from
+	// other sessions used to land there, leaving a row spinning over an idle
+	// splash screen.
+	if m.frontIsProduct(id) {
+		return status.Idle
 	}
 	r, hasEvent := m.runtime[id]
 	hasEvent = hasEvent && r.Status != ""

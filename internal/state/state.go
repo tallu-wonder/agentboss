@@ -106,6 +106,30 @@ var idPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
 // suffix.
 func ValidID(id string) bool { return idPattern.MatchString(id) }
 
+// AcceptsReport reports whether a hook event belongs to this session.
+//
+// AGENTBOSS_ID is exported into a session's tmux environment, which used to
+// make it proof of origin. Claude Code now pre-warms spare processes and
+// hands them to whichever terminal claims one, so a spare can carry another
+// session's id and report a conversation that belongs elsewhere: rows adopted
+// foreign conversations, and status files filled with someone else's activity
+// (a row sat there spinning while its pane did nothing).
+//
+// An event is ours when it names the conversation we already track, or when
+// it comes from our folder (or below it, since a session may cd deeper). An
+// event with no origin at all is accepted: older agents send none, and status
+// is better than silence.
+func (s *Session) AcceptsReport(convID, cwd string) bool {
+	if convID != "" && convID == s.SessionID {
+		return true
+	}
+	if cwd == "" || s.Dir == "" {
+		return true
+	}
+	cwd, dir := filepath.Clean(cwd), filepath.Clean(s.Dir)
+	return cwd == dir || strings.HasPrefix(cwd, dir+string(filepath.Separator))
+}
+
 // Load reads the state file. A missing file yields an empty desk.
 func Load(path string) (*State, error) {
 	data, err := os.ReadFile(path)

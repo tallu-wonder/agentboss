@@ -270,6 +270,8 @@ func TestFrontNameReadsThePaneTitle(t *testing.T) {
 	set("s_spaced", "  ✻  debug-nimbus-cloudflared-dns  ")
 	set("s_shell", "zsh")
 	set("s_bin", "claude")
+	set("s_product", "✳ Claude Code")
+	set("s_product2", "claude code")
 	set("s_empty", "")
 	set("s_glyphonly", "✳")
 
@@ -279,6 +281,8 @@ func TestFrontNameReadsThePaneTitle(t *testing.T) {
 		"s_spaced":    "debug-nimbus-cloudflared-dns",
 		"s_shell":     "",
 		"s_bin":       "",
+		"s_product":   "", // the app's own title, before any conversation
+		"s_product2":  "",
 		"s_empty":     "",
 		"s_glyphonly": "",
 		"s_dormant":   "", // not live at all

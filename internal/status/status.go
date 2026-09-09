@@ -29,10 +29,15 @@ const (
 
 // Runtime is what a hook knows about a session at a moment in time.
 type Runtime struct {
-	Status          Kind      `json:"status"`
-	ClaudeSessionID string    `json:"claude_session_id,omitempty"`
-	Message         string    `json:"message,omitempty"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	Status          Kind   `json:"status"`
+	ClaudeSessionID string `json:"claude_session_id,omitempty"`
+	// CWD is the folder the reporting conversation runs in. Claude Code
+	// pre-warms spare processes that can inherit another pane's AGENTBOSS_ID,
+	// so a report is not proof of which session it came from: the desk checks
+	// this against the row's own folder before believing it.
+	CWD       string    `json:"cwd,omitempty"`
+	Message   string    `json:"message,omitempty"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // idPattern is the shape of the ids agentboss generates. A session id becomes a
@@ -138,6 +143,7 @@ func Apply(prev Runtime, ev HookEvent) (Runtime, bool) {
 	next := prev
 	if ev.SessionID != "" {
 		next.ClaudeSessionID = ev.SessionID
+		next.CWD = ev.CWD
 	}
 	switch ev.HookEventName {
 	case "SessionStart":

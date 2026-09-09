@@ -237,3 +237,33 @@ func TestLoadRescuesSessionsWithNoRealGroup(t *testing.T) {
 		t.Error("a genuinely archived session must stay archived")
 	}
 }
+
+// AGENTBOSS_ID used to be proof of origin. Claude Code hands pre-warmed
+// processes to whichever terminal claims one, so a spare can carry another
+// session's id: an event has to be checked against what the row actually
+// tracks, or a row adopts foreign conversations and spins with someone
+// else's activity.
+func TestAcceptsReport(t *testing.T) {
+	s := &Session{Dir: "/Users/dev/GitHub", SessionID: "known-conv"}
+	for _, c := range []struct {
+		what, conv, cwd string
+		want            bool
+	}{
+		{"our own conversation, wherever it runs", "known-conv", "/somewhere/else", true},
+		{"our folder", "other-conv", "/Users/dev/GitHub", true},
+		{"below our folder (the session cd'd deeper)", "other-conv", "/Users/dev/GitHub/agentboss", true},
+		{"trailing slash still ours", "other-conv", "/Users/dev/GitHub/", true},
+		{"our parent is not ours", "other-conv", "/Users/dev", false},
+		{"a sibling is not ours", "other-conv", "/Users/dev/GitLab", false},
+		{"a prefix collision is not ours", "other-conv", "/Users/dev/GitHub-old", false},
+		{"no origin reported at all", "other-conv", "", true},
+	} {
+		if got := s.AcceptsReport(c.conv, c.cwd); got != c.want {
+			t.Errorf("%s: AcceptsReport(%q, %q) = %v, want %v", c.what, c.conv, c.cwd, got, c.want)
+		}
+	}
+	// A row with no folder cannot judge, so it accepts.
+	if !(&Session{}).AcceptsReport("x", "/anywhere") {
+		t.Error("a row with no folder should accept reports")
+	}
+}
