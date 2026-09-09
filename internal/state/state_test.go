@@ -1,6 +1,7 @@
 package state
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -184,5 +185,55 @@ func TestLoadMissingFile(t *testing.T) {
 	s, err := Load(filepath.Join(t.TempDir(), "nope.json"))
 	if err != nil || s == nil || len(s.Sessions) != 0 {
 		t.Fatalf("missing file should give empty state, got %v %v", s, err)
+	}
+}
+
+// A session whose group no longer exists (or which points at the "old"
+// shelf's pseudo-id, which is not a group) must not vanish from the desk:
+// the sidebar walks real groups and the shelf lists archived sessions, so
+// such a row renders nowhere while still holding its conversation id, which
+// also keeps it out of the import picker.
+func TestLoadRescuesSessionsWithNoRealGroup(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "state.json")
+	raw := `{
+	  "version": 1,
+	  "groups": [{"id": "g_real", "name": "shipping"}],
+	  "sessions": [
+	    {"id": "s_orphan",  "name": "lost to the shelf", "group_id": "@old"},
+	    {"id": "s_deleted", "name": "group was deleted",  "group_id": "g_gone"},
+	    {"id": "s_ok",      "name": "grouped",            "group_id": "g_real"},
+	    {"id": "s_plain",   "name": "ungrouped",          "group_id": ""},
+	    {"id": "s_shelved", "name": "properly archived",  "archived": true}
+	  ]
+	}`
+	if err := os.WriteFile(path, []byte(raw), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	st, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{
+		"s_orphan":  "",
+		"s_deleted": "",
+		"s_ok":      "g_real",
+		"s_plain":   "",
+		"s_shelved": "",
+	}
+	for _, s := range st.Sessions {
+		if got := s.GroupID; got != want[s.ID] {
+			t.Errorf("%s: group_id = %q, want %q", s.ID, got, want[s.ID])
+		}
+	}
+	// Rescuing must not shelve anything, or a live session would be filed as
+	// history.
+	for _, s := range st.Sessions {
+		if s.ID != "s_shelved" && s.Archived {
+			t.Errorf("%s was archived by the rescue", s.ID)
+		}
+	}
+	if s := st.Session("s_shelved"); s == nil || !s.Archived {
+		t.Error("a genuinely archived session must stay archived")
 	}
 }

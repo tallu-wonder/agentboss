@@ -484,6 +484,65 @@ func CostDelta(path string, from int64) (delta float64, newOff int64, rescanned 
 // (~/.claude/sessions/<pid>.json), which is exactly the name shown in
 // claude's own status badge. Entries whose process is gone are ignored.
 func LiveNames() map[string]string {
+	out := map[string]string{}
+	for sid, r := range liveNameRecords() {
+		out[sid] = r.Name
+	}
+	return out
+}
+
+// LiveName is the name to show for one live session: the newest of Claude's
+// badge registry and the session's own custom-title sidecar.
+//
+// The registry is written per process and can go stale while that process is
+// still alive — a rename lands in the transcript and in
+// <project>/<uuid>/custom-title.json, and the registry file is not always
+// rewritten. Trusting it blindly pinned a session to Claude's auto-label
+// (a cwd-derived "tal-lu-2f") and no later rename could win, because the desk
+// treats a registry name as authoritative. Compare the two timestamps and
+// take the newer one.
+func LiveName(sessionID string) string {
+	reg := liveNameRecords()[sessionID]
+	title, at := CustomTitle(sessionID)
+	if title != "" && (reg.Name == "" || at.After(reg.At)) {
+		return title
+	}
+	return reg.Name
+}
+
+// CustomTitle reads the title Claude Code stores beside a session's
+// transcript, with the file's modification time. "" when there is none.
+func CustomTitle(sessionID string) (string, time.Time) {
+	path := TranscriptPath(sessionID)
+	if path == "" {
+		return "", time.Time{}
+	}
+	p := filepath.Join(strings.TrimSuffix(path, ".jsonl"), "custom-title.json")
+	fi, err := os.Stat(p)
+	if err != nil {
+		return "", time.Time{}
+	}
+	data, err := os.ReadFile(p)
+	if err != nil {
+		return "", time.Time{}
+	}
+	var rec struct {
+		CustomTitle string `json:"customTitle"`
+	}
+	if json.Unmarshal(data, &rec) != nil {
+		return "", time.Time{}
+	}
+	return clean(rec.CustomTitle), fi.ModTime()
+}
+
+// nameRec is one registry entry: the name Claude last published for a live
+// session, and when it published it.
+type nameRec struct {
+	Name string
+	At   time.Time
+}
+
+func liveNameRecords() map[string]nameRec {
 	dir := os.Getenv("AGENTBOSS_CLAUDE_SESSIONS")
 	if dir == "" {
 		home, err := os.UserHomeDir()
@@ -522,9 +581,9 @@ func LiveNames() map[string]string {
 			newest[r.SessionID] = r
 		}
 	}
-	out := map[string]string{}
+	out := map[string]nameRec{}
 	for sid, r := range newest {
-		out[sid] = clean(r.Name)
+		out[sid] = nameRec{Name: clean(r.Name), At: time.UnixMilli(r.UpdatedAt)}
 	}
 	return out
 }

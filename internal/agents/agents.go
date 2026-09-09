@@ -155,7 +155,7 @@ func (claudeProvider) Probe(path string) Info {
 func (claudeProvider) Adopt(string, time.Time) string { return "" }
 
 func (claudeProvider) LiveName(sessionID string) string {
-	return claudesessions.LiveNames()[sessionID]
+	return claudesessions.LiveName(sessionID)
 }
 func (claudeProvider) Scan(exclude map[string]bool, limit int) []Conversation {
 	src := claudesessions.Scan(exclude, limit)

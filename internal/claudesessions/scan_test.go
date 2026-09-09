@@ -1,10 +1,12 @@
 package claudesessions
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
 	"testing"
+	"time"
 )
 
 func writeTranscript(t *testing.T, root, proj, sid, content string) string {
@@ -242,5 +244,82 @@ func TestPricesOverride(t *testing.T) {
 	priceTable = nil
 	if in, out := price("opus"); in != 5 || out != 25 {
 		t.Errorf("broken price file: opus = %v/%v, want the built-in 5/25", in, out)
+	}
+}
+
+// Claude's badge registry is written per process and can go stale while that
+// process is still alive: a rename lands in the transcript and in the
+// session's custom-title sidecar, and the registry file is not always
+// rewritten. The desk treats a registry name as authoritative, so trusting a
+// stale one pinned a session to Claude's cwd-derived auto-label and no later
+// rename could ever win. The newer of the two must be the name.
+func TestLiveNamePrefersTheNewerTitle(t *testing.T) {
+	root := t.TempDir()
+	reg := t.TempDir()
+	t.Setenv("AGENTBOSS_CLAUDE_PROJECTS", root)
+	t.Setenv("AGENTBOSS_CLAUDE_SESSIONS", reg)
+
+	proj := filepath.Join(root, "-Users-dev-project")
+	if err := os.MkdirAll(proj, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// registry entry, published an hour ago by a process that is still alive
+	write := func(sid, name string, at time.Time) {
+		rec := fmt.Sprintf(`{"sessionId":%q,"name":%q,"pid":%d,"updatedAt":%d}`,
+			sid, name, os.Getpid(), at.UnixMilli())
+		if err := os.WriteFile(filepath.Join(reg, sid[:8]+".json"), []byte(rec), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// sidecar title, written after the registry entry
+	sidecar := func(sid, title string, at time.Time) {
+		dir := filepath.Join(proj, sid)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		p := filepath.Join(dir, "custom-title.json")
+		if err := os.WriteFile(p, []byte(fmt.Sprintf(`{"customTitle":%q}`, title)), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chtimes(p, at, at); err != nil {
+			t.Fatal(err)
+		}
+	}
+	transcript := func(sid string) {
+		if err := os.WriteFile(filepath.Join(proj, sid+".jsonl"), []byte("{}\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	now := time.Now()
+
+	// renamed after the registry went stale: the rename wins
+	renamed := "11111111-1111-4111-8111-111111111111"
+	transcript(renamed)
+	write(renamed, "dev-project-2f", now.Add(-time.Hour))
+	sidecar(renamed, "debug the dns thing", now.Add(-time.Minute))
+	if got := LiveName(renamed); got != "debug the dns thing" {
+		t.Errorf("stale registry beat a newer rename: got %q", got)
+	}
+
+	// registry is the newer signal (renamed, then renamed again in-CLI)
+	fresh := "22222222-2222-4222-8222-222222222222"
+	transcript(fresh)
+	sidecar(fresh, "old title", now.Add(-time.Hour))
+	write(fresh, "current title", now.Add(-time.Minute))
+	if got := LiveName(fresh); got != "current title" {
+		t.Errorf("older sidecar beat the live registry: got %q", got)
+	}
+
+	// no sidecar at all: the registry still names it
+	only := "33333333-3333-4333-8333-333333333333"
+	transcript(only)
+	write(only, "registry only", now)
+	if got := LiveName(only); got != "registry only" {
+		t.Errorf("registry-only name lost: got %q", got)
+	}
+
+	// nothing live and nothing on disk
+	if got := LiveName("44444444-4444-4444-8444-444444444444"); got != "" {
+		t.Errorf("unknown session named %q", got)
 	}
 }

@@ -136,7 +136,28 @@ func Load(path string) (*State, error) {
 	for i := range s.Groups {
 		s.Groups[i].Name = sanitize.Line(s.Groups[i].Name)
 	}
+	s.normalizeGroups()
 	return &s, nil
+}
+
+// normalizeGroups rescues sessions whose GroupID names no existing group.
+//
+// A row like that is rendered nowhere: the sidebar walks the real groups, and
+// the "old" shelf lists archived sessions, so an entry pointing at a deleted
+// group (or at the shelf's own pseudo-id, which is not a group at all)
+// vanishes from the desk while still holding its conversation id, which also
+// makes it unimportable. Whatever wrote it, the desk must never hide a
+// session: park these in no group, where they show up at the top.
+func (s *State) normalizeGroups() {
+	real := make(map[string]bool, len(s.Groups))
+	for _, g := range s.Groups {
+		real[g.ID] = true
+	}
+	for i := range s.Sessions {
+		if gid := s.Sessions[i].GroupID; gid != "" && !real[gid] {
+			s.Sessions[i].GroupID = ""
+		}
+	}
 }
 
 // Agent kinds. An empty Agent field reads as AgentClaude.
