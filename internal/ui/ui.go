@@ -127,6 +127,10 @@ type Model struct {
 	branchValue   string
 	branchChecked time.Time
 
+	// refusedConv remembers conversation ids we declined to bind to a row, so
+	// a pane running several agents is judged once rather than every tick.
+	refusedConv map[string]string
+
 	// unfocused: the keyboard is elsewhere (usually inside the agent). Read
 	// from tmux's pane_active each tick; the sidebar dims its header so a
 	// glance answers "where will my keys land?".
@@ -1148,8 +1152,9 @@ func (m *Model) refresh() {
 		s := &m.st.Sessions[i]
 		known[s.ID] = true
 		if r, ok := m.runtime[s.ID]; ok && r.ClaudeSessionID != "" && r.ClaudeSessionID != s.SessionID {
-			s.SessionID = r.ClaudeSessionID
-			m.dirty = true
+			if m.adoptConversation(s, r.ClaudeSessionID) {
+				m.dirty = true
+			}
 		}
 	}
 	// GC status files with no desk entry: a deleted session's dying agent
@@ -1168,6 +1173,40 @@ func (m *Model) refresh() {
 		delete(m.runtime, id)
 	}
 
+}
+
+// adoptConversation decides whether a conversation id reported by a hook
+// belongs to this row.
+//
+// One tmux session can host several conversations: Claude Code runs a pane
+// full of agents and they all inherit the same AGENTBOSS_ID, so every agent
+// started in (or switched to in) that pane reports itself here. Rebinding on
+// every report let a background agent steal the row: a session opened as
+// "speed-up terraform workflows" ended up pointing at a different
+// conversation, so resuming it later produced someone else's work and the
+// original became unreachable from the desk.
+//
+// A row keeps the conversation it already has. It adopts a reported one only
+// when it has none yet, or when the id it holds has no transcript left, which
+// is the resume-failed-and-started-fresh case.
+func (m *Model) adoptConversation(s *state.Session, reported string) bool {
+	if s.SessionID == "" {
+		s.SessionID = reported
+		return true
+	}
+	if m.refusedConv[s.ID] == reported {
+		return false // already judged; don't re-stat every tick
+	}
+	if agents.Get(s.AgentOf()).TranscriptPath(s.SessionID) != "" {
+		if m.refusedConv == nil {
+			m.refusedConv = map[string]string{}
+		}
+		m.refusedConv[s.ID] = reported
+		return false
+	}
+	s.SessionID = reported
+	delete(m.refusedConv, s.ID)
+	return true
 }
 
 // isLive reports whether the session's tmux session exists.

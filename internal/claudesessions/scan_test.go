@@ -323,3 +323,73 @@ func TestLiveNamePrefersTheNewerTitle(t *testing.T) {
 		t.Errorf("unknown session named %q", got)
 	}
 }
+
+// Claude Code labels an unnamed agent after its working directory or its
+// session id. Those labels must never be taken for titles: the desk treats a
+// live name as authoritative, so one pinned a session to it forever, and a
+// session could sit on the desk as a bare hex blob while its own transcript
+// held a real title.
+func TestPlaceholderLabelsAreNotNames(t *testing.T) {
+	sid := "52889ff1-d695-4509-b684-5e986441ff28"
+	for _, c := range []struct {
+		name, cwd string
+		want      bool
+	}{
+		{"52889ff1", "/Users/dev/GitHub", true},     // the id's first block
+		{"52889ff1-2f", "/Users/dev/GitHub", true},  // ... with a hex tail
+		{"tal-lu-2f", "/Users/tal.lu", true},        // cwd slug plus tail
+		{"tal-lu", "/Users/tal.lu", true},           // cwd slug alone
+		{"github-5e", "/Users/tal.lu/GitHub", true}, // case-folded slug
+		{"GitHub", "/Users/tal.lu/GitHub", true},    // and as typed
+		{"speed-up terraform workflows", "/Users/tal.lu/GitHub", false},
+		{"local-dns-failed-apply", "/Users/tal.lu", false},
+		{"debug-nimbus-cloudflared-dns", "/Users/tal.lu", false},
+		{"52889", "/Users/dev/x", false}, // a real, short, name
+		{"", "/Users/dev/x", false},
+	} {
+		if got := placeholderLabel(c.name, sid, c.cwd); got != c.want {
+			t.Errorf("placeholderLabel(%q, cwd=%q) = %v, want %v", c.name, c.cwd, got, c.want)
+		}
+	}
+}
+
+// End to end through the registry: a placeholder label loses to the title the
+// session carries, and to nothing at all when it has no title.
+func TestLiveNameIgnoresPlaceholderLabels(t *testing.T) {
+	root, reg := t.TempDir(), t.TempDir()
+	t.Setenv("AGENTBOSS_CLAUDE_PROJECTS", root)
+	t.Setenv("AGENTBOSS_CLAUDE_SESSIONS", reg)
+	proj := filepath.Join(root, "-Users-tal-lu")
+	if err := os.MkdirAll(proj, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sid := "0d8d54c8-4ee3-4e1c-b0f3-a63084988007"
+	if err := os.WriteFile(filepath.Join(proj, sid+".jsonl"), []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// The label is published NEWER than the title, which is exactly the case
+	// that broke: a live process keeps republishing its own label.
+	rec := fmt.Sprintf(`{"sessionId":%q,"name":"tal-lu-2f","cwd":"/Users/tal.lu","pid":%d,"updatedAt":%d}`,
+		sid, os.Getpid(), time.Now().UnixMilli())
+	if err := os.WriteFile(filepath.Join(reg, "1.json"), []byte(rec), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := LiveName(sid); got != "" {
+		t.Errorf("with no title, a placeholder label should name nothing, got %q", got)
+	}
+	dir := filepath.Join(proj, sid)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	title := filepath.Join(dir, "custom-title.json")
+	if err := os.WriteFile(title, []byte(`{"customTitle":"debug-nimbus-cloudflared-dns"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	older := time.Now().Add(-2 * time.Hour)
+	if err := os.Chtimes(title, older, older); err != nil {
+		t.Fatal(err)
+	}
+	if got := LiveName(sid); got != "debug-nimbus-cloudflared-dns" {
+		t.Errorf("a placeholder label beat the session's own title: got %q", got)
+	}
+}

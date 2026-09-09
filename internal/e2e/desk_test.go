@@ -205,6 +205,7 @@ type deskState struct {
 		Dir      string `json:"dir"`
 		Archived bool   `json:"archived"`
 		GroupID  string `json:"group_id"`
+		ConvID   string `json:"session_id"`
 	} `json:"sessions"`
 	NotifyMuted bool `json:"notify_muted"`
 }
@@ -1008,4 +1009,50 @@ func TestActionChordsWorkFromInsideAnAgent(t *testing.T) {
 			}
 		}
 	}
+}
+
+// A pane can host several conversations: Claude Code runs a pane full of
+// agents, and every one of them inherits the same AGENTBOSS_ID, so each
+// reports itself to the same desk row. The row must keep the conversation it
+// already has, or a background agent silently steals the session and
+// resuming it later opens someone else's work.
+func TestASecondConversationCannotStealARow(t *testing.T) {
+	d := newDesk(t)
+	id := d.newSession("keeps-its-identity")
+
+	// The agent announces itself, exactly as Claude Code's SessionStart hook
+	// does, and the desk learns the id it will resume.
+	first := "11111111-1111-4111-8111-111111111111"
+	d.hook(id, `{"hook_event_name":"SessionStart","session_id":"`+first+`"}`)
+	d.waitFor("the desk to learn the conversation id", func() bool {
+		return d.state().Sessions[0].ConvID == first
+	})
+
+	// Give that conversation a transcript: it exists, so the row is bound.
+	proj := filepath.Join(d.dir, "projects", "-w")
+	if err := os.MkdirAll(proj, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(proj, first+".jsonl"), []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// A second agent in the same pane reports itself. The row must not move.
+	second := "22222222-2222-4222-8222-222222222222"
+	d.hook(id, `{"hook_event_name":"SessionStart","session_id":"`+second+`"}`)
+	time.Sleep(2 * time.Second)
+	if got := d.state().Sessions[0].ConvID; got != first {
+		t.Fatalf("row rebound to %s: a second agent stole the session", got)
+	}
+
+	// But a row whose conversation has no transcript left (resume failed and
+	// fell back to a fresh session) does adopt what the agent reports.
+	if err := os.Remove(filepath.Join(proj, first+".jsonl")); err != nil {
+		t.Fatal(err)
+	}
+	third := "33333333-3333-4333-8333-333333333333"
+	d.hook(id, `{"hook_event_name":"SessionStart","session_id":"`+third+`"}`)
+	d.waitFor("a dead conversation id to be replaced", func() bool {
+		return d.state().Sessions[0].ConvID == third
+	})
 }

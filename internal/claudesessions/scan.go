@@ -503,6 +503,9 @@ func LiveNames() map[string]string {
 // take the newer one.
 func LiveName(sessionID string) string {
 	reg := liveNameRecords()[sessionID]
+	if placeholderLabel(reg.Name, sessionID, reg.Cwd) {
+		reg.Name = "" // a label, not a name: never let it outrank a title
+	}
 	title, at := CustomTitle(sessionID)
 	if title != "" && (reg.Name == "" || at.After(reg.At)) {
 		return title
@@ -539,6 +542,7 @@ func CustomTitle(sessionID string) (string, time.Time) {
 // session, and when it published it.
 type nameRec struct {
 	Name string
+	Cwd  string
 	At   time.Time
 }
 
@@ -558,6 +562,7 @@ func liveNameRecords() map[string]nameRec {
 	type reg struct {
 		SessionID string `json:"sessionId"`
 		Name      string `json:"name"`
+		Cwd       string `json:"cwd"`
 		PID       int    `json:"pid"`
 		UpdatedAt int64  `json:"updatedAt"`
 	}
@@ -583,7 +588,7 @@ func liveNameRecords() map[string]nameRec {
 	}
 	out := map[string]nameRec{}
 	for sid, r := range newest {
-		out[sid] = nameRec{Name: clean(r.Name), At: time.UnixMilli(r.UpdatedAt)}
+		out[sid] = nameRec{Name: clean(r.Name), Cwd: r.Cwd, At: time.UnixMilli(r.UpdatedAt)}
 	}
 	return out
 }
@@ -737,4 +742,57 @@ func clean(s string) string {
 		return string(r[:59]) + "…"
 	}
 	return s
+}
+
+// placeholderLabel reports whether name is one of Claude Code's own labels for
+// an agent nobody has named: the first block of the session id ("52889ff1"),
+// or a slug of the working directory with an optional short suffix
+// ("tal-lu-2f" for /Users/tal.lu, "github-5e" for ~/GitHub).
+//
+// These are not titles. The desk treats a live name as authoritative, so
+// accepting one pinned a session to it and no later rename could take over;
+// worse, a session could end up displayed as a bare hex blob while its
+// transcript held a perfectly good title.
+func placeholderLabel(name, sessionID, cwd string) bool {
+	if name == "" {
+		return false
+	}
+	// "<something>-2f": Claude disambiguates repeats with a short hex tail.
+	base := name
+	if i := strings.LastIndex(name, "-"); i > 0 && isShortHex(name[i+1:]) {
+		base = name[:i]
+	}
+	if id, _, ok := strings.Cut(sessionID, "-"); ok && id != "" && (name == id || base == id) {
+		return true
+	}
+	if cwd == "" {
+		return false
+	}
+	return strings.EqualFold(base, slugDir(cwd))
+}
+
+// slugDir renders a directory's last element the way Claude Code labels it:
+// lowercase, with anything but a letter or digit turned into a dash.
+func slugDir(dir string) string {
+	var b strings.Builder
+	for _, r := range strings.ToLower(filepath.Base(dir)) {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+			continue
+		}
+		b.WriteByte('-')
+	}
+	return b.String()
+}
+
+func isShortHex(s string) bool {
+	if s == "" || len(s) > 4 {
+		return false
+	}
+	for _, r := range s {
+		if !((r >= '0' && r <= '9') || (r >= 'a' && r <= 'f')) {
+			return false
+		}
+	}
+	return true
 }
