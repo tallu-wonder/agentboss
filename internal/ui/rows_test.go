@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -271,6 +272,7 @@ func TestFrontNameReadsThePaneTitle(t *testing.T) {
 	set("s_shell", "zsh")
 	set("s_bin", "claude")
 	set("s_product", "✳ Claude Code")
+	set("s_host", hostTitleForTest())
 	set("s_product2", "claude code")
 	set("s_empty", "")
 	set("s_glyphonly", "✳")
@@ -290,5 +292,43 @@ func TestFrontNameReadsThePaneTitle(t *testing.T) {
 		if got := m.frontName(id); got != want {
 			t.Errorf("frontName(%s) = %q, want %q", id, got, want)
 		}
+	}
+}
+
+// hostTitleForTest is what tmux reports for a pane whose program never set a
+// title: this machine's hostname.
+func hostTitleForTest() string {
+	h, _ := os.Hostname()
+	return h
+}
+
+// The status override must fire only on a positive splash: a pane with no
+// title at all (a shell, tmux's hostname default) says nothing about what it
+// is doing, and calling that idle would hide a real alert from any agent that
+// never sets a pane title.
+func TestOnlyARealSplashMeansIdle(t *testing.T) {
+	host, _ := os.Hostname()
+	for _, c := range []struct {
+		title string
+		want  bool
+	}{
+		{"Claude Code", true},
+		{"claude code", true},
+		{"codex", true},
+		{"local-dns-failed-apply", false},
+		{"zsh", false},
+		{host, false},
+		{"", false},
+	} {
+		if got := agentSplash(c.title); got != c.want {
+			t.Errorf("agentSplash(%q) = %v, want %v", c.title, got, c.want)
+		}
+		// Naming is stricter: a shell or the hostname is not a name either.
+		if c.want && !productTitle(c.title) {
+			t.Errorf("productTitle(%q) should also reject the agent's own name", c.title)
+		}
+	}
+	if !productTitle(host) || !productTitle("zsh") {
+		t.Error("a default title must not be used as a name")
 	}
 }

@@ -1110,4 +1110,9 @@ func TestAForeignBindingIsDropped(t *testing.T) {
 	d.waitFor("the foreign binding to be dropped", func() bool {
 		return d.state().Sessions[0].ConvID == ""
 	})
+	// And the name that came with it: a row must not keep wearing another
+	// session's title with nothing left to back it up.
+	d.waitFor("the row to be named after its folder again", func() bool {
+		return d.state().Sessions[0].Name == "mine"
+	})
 }

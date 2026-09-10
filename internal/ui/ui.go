@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
@@ -1058,18 +1059,16 @@ func (m *Model) syncNames() {
 				filepath.Clean(home) != filepath.Clean(s.Dir) {
 				s.SessionID = ""
 				p.path, p.title, p.info = "", "", agents.Info{}
+				// The name came with that conversation, so it goes too, or the
+				// row keeps wearing another session's title with nothing left
+				// to back it up.
+				resetName(s)
 				m.dirty = true
 			}
 		}
 		if s.NameExplicit && !s.NamedByUser &&
 			(productTitle(s.Name) || prov.PlaceholderName(s.Name, s.SessionID, s.Dir)) {
-			s.NameExplicit = false
-			// Nothing better may exist yet (a young conversation has no
-			// title), and a bare id block reads as noise on the desk, so fall
-			// back to what a new session is called here: its folder.
-			if folder := filepath.Base(s.Dir); folder != "" && folder != "." && folder != string(filepath.Separator) {
-				s.Name = folder
-			}
+			resetName(s)
 			m.dirty = true
 		}
 		// A rename inside the agent is the newest thing the user said about
@@ -1264,15 +1263,43 @@ func (m *Model) adoptConversation(s *state.Session, reported, cwd string) bool {
 }
 
 // isLive reports whether the session's tmux session exists.
-// frontIsProduct reports whether a live session's pane shows the agent itself
-// rather than a conversation: its title is the product's own (a fresh Claude
-// Code screen), so there is nothing in progress there.
+// resetName gives a session the name a new one would get here, its folder,
+// and unpins it so the next real title takes over. Used when the name a row
+// is wearing turns out to stand for nothing: one of the agent's placeholder
+// labels, the agent's own product name, or a conversation that was never this
+// row's to begin with. A name the user typed is left alone.
+func resetName(s *state.Session) {
+	if s.NamedByUser {
+		return
+	}
+	s.NameExplicit = false
+	if folder := filepath.Base(s.Dir); folder != "" && folder != "." && folder != string(filepath.Separator) {
+		s.Name = folder
+	}
+}
+
+// frontIsProduct reports whether a live session's pane is showing the agent
+// itself rather than a conversation, which its own product name in the title
+// proves (a fresh Claude Code screen): nothing is in progress there.
 func (m *Model) frontIsProduct(id string) bool {
 	info, ok := m.live[state.TmuxName(id)]
 	if !ok || strings.TrimSpace(info.Title) == "" {
 		return false // no title at all says nothing either way
 	}
-	return productTitle(sanitize.Line(strings.TrimLeft(strings.TrimSpace(info.Title), "✳✻✽✢·*⏵ \t")))
+	return agentSplash(sanitize.Line(strings.TrimLeft(strings.TrimSpace(info.Title), "✳✻✽✢·*⏵ \t")))
+}
+
+// agentSplash reports whether a pane title is the agent naming ITSELF, which
+// it does when no conversation is open. Only a positive match counts: a
+// missing title (a shell, tmux's hostname default) says nothing about what
+// the pane is doing, and reading it as idle would hide a real alert from any
+// agent that never sets a title.
+func agentSplash(title string) bool {
+	switch strings.ToLower(strings.TrimSpace(title)) {
+	case "claude", "claude code", "codex", "codex cli":
+		return true
+	}
+	return false
 }
 
 // frontName is the name of the conversation a live session is showing: its
@@ -1300,13 +1327,31 @@ func (m *Model) frontName(id string) string {
 // whose resume failed). Naming a row after it says nothing and, worse, used
 // to be pinned as though someone had chosen it.
 func productTitle(title string) bool {
-	switch strings.ToLower(strings.TrimSpace(title)) {
+	t := strings.ToLower(strings.TrimSpace(title))
+	switch t {
 	case "", "zsh", "bash", "sh", "fish", "node",
 		"claude", "claude code", "codex", "codex cli", "agentboss":
 		return true
 	}
-	return false
+	// tmux reports the machine's hostname for a pane whose program never set
+	// a title, so that is the absence of a title, not a name.
+	host, short := hostNames()
+	return t == host || (short != "" && t == short)
 }
+
+// hostNames returns this machine's hostname and its first label, lowercased.
+var hostNames = sync.OnceValues(func() (string, string) {
+	h, err := os.Hostname()
+	if err != nil {
+		return "", ""
+	}
+	h = strings.ToLower(strings.TrimSuffix(h, "."))
+	short, _, _ := strings.Cut(h, ".")
+	if short == h {
+		short = ""
+	}
+	return h, short
+})
 
 func (m *Model) isLive(id string) bool {
 	_, ok := m.live[state.TmuxName(id)]
