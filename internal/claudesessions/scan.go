@@ -677,9 +677,24 @@ func peek(path string) Conversation {
 	var summary, firstUser string
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 0, 256*1024), 256*1024)
-	for n := 0; sc.Scan() && n < 80; n++ {
+	// The head holds the conversation's identity, but how far in it starts
+	// varies: a transcript can open with a long preamble of metadata and
+	// file-history snapshots, and one that did pushed its cwd past line 80,
+	// which made the import picker skip the whole conversation as
+	// unrecognizable. Keep reading until the folder is known, up to a bounded
+	// number of lines, and stop looking for titles after the first stretch.
+	const titleLines, dirLines = 80, 4000
+	for n := 0; n < dirLines && sc.Scan(); n++ {
 		var l line
 		if json.Unmarshal(sc.Bytes(), &l) != nil {
+			continue
+		}
+		if n >= titleLines {
+			// Past the title window: the folder is all that is still wanted.
+			if l.CWD != "" {
+				c.Dir = l.CWD
+				break
+			}
 			continue
 		}
 		switch {
@@ -703,6 +718,9 @@ func peek(path string) Conversation {
 				firstUser = clean(t)
 			}
 		}
+	}
+	if c.Dir == "" {
+		return c // nothing identifies this file as a conversation
 	}
 	c.Title = summary
 	if c.Title == "" {

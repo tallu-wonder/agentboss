@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -391,5 +392,47 @@ func TestLiveNameIgnoresPlaceholderLabels(t *testing.T) {
 	}
 	if got := LiveName(sid); got != "debug-nimbus-cloudflared-dns" {
 		t.Errorf("a placeholder label beat the session's own title: got %q", got)
+	}
+}
+
+// A transcript can open with a long preamble of metadata and file-history
+// snapshots before its first real record. One did, pushing its cwd past the
+// window peek used to read, so the import picker skipped the whole
+// conversation as unrecognizable and there was no way to get it back onto the
+// desk.
+func TestScanFindsAConversationWithALongPreamble(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("AGENTBOSS_CLAUDE_PROJECTS", root)
+	proj := filepath.Join(root, "-Users-dev-work")
+	if err := os.MkdirAll(proj, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var b strings.Builder
+	b.WriteString(`{"type":"custom-title","customTitle":"the real thread"}` + "\n")
+	// 200 lines of preamble: well past any fixed head window.
+	for i := 0; i < 200; i++ {
+		b.WriteString(`{"type":"file-history-snapshot","isSnapshotUpdate":true}` + "\n")
+	}
+	b.WriteString(`{"type":"user","cwd":"/Users/dev/work","timestamp":"2026-09-07T18:04:54.107Z",` +
+		`"message":{"role":"user","content":"pick up where we left off"}}` + "\n")
+	sid := "d365dd31-c9d5-418f-a685-4043e23cef98"
+	if err := os.WriteFile(filepath.Join(proj, sid+".jsonl"), []byte(b.String()), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got := Scan(map[string]bool{}, 100)
+	if len(got) != 1 {
+		t.Fatalf("scan returned %d conversations, want the one with a preamble", len(got))
+	}
+	if got[0].SessionID != sid || got[0].Dir != "/Users/dev/work" || got[0].Title != "the real thread" {
+		t.Errorf("got %+v", got[0])
+	}
+
+	// A file that never names a folder is still not a conversation.
+	junk := filepath.Join(proj, "11111111-1111-4111-8111-111111111111.jsonl")
+	if err := os.WriteFile(junk, []byte(`{"type":"custom-title","customTitle":"no folder"}`+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := Scan(map[string]bool{}, 100); len(got) != 1 {
+		t.Errorf("a transcript with no folder should be skipped, got %d", len(got))
 	}
 }
